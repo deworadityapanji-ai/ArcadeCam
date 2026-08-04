@@ -107,7 +107,11 @@ public static class PatchHelper
         if (cam == null || cam.currentState != cam.chaseState)
             return cameraTransform.forward;
 
-        if (Plugin.TurretAimInChase.Value)
+        // Which setting applies depends on which camera is running — the cinematic one has its own,
+        // because its forward no longer runs out ahead of the aircraft but back towards it, so a
+        // turret slaved to it points at the ground below you. That is a poor default but a legitimate
+        // choice, and the config says which it is rather than this deciding.
+        if (ChaseSettings.TurretFollowsCamera)
             return cameraTransform.forward;
 
         return GameManager.GetLocalAircraft(out Aircraft aircraft) && aircraft != null

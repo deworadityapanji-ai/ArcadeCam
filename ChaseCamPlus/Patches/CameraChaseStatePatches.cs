@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 using ChaseCamPlus.Helpers;
 using HarmonyLib;
@@ -26,21 +27,54 @@ public class CameraChaseStatePatches
     [HarmonyPatch(typeof(CameraChaseState), nameof(CameraChaseState.EnterState))]
     static class EnterState
     {
-        static void Postfix() => ResetOrbit();
+        static void Postfix()
+        {
+            ResetOrbit();
+            CinematicCamera.Reset();
+        }
     }
 
     /// <summary>
     /// Hiding the minimap widgets is a chase-only decision, so leaving chase has to put them back —
     /// otherwise the cockpit inherits a missing map from a setting that was never about it.
+    ///
+    /// A finalizer rather than a postfix, because vanilla <c>LeaveState</c> can throw and a postfix
+    /// would then never run — leaving the HUD elements hidden into the next life. Its last statement
+    /// is <c>cam.followingUnit.SetDoppler(true)</c> with no null check, and the way this state is
+    /// usually left is <c>SetFollowingUnit</c> clearing that very field after the pilot dies. A
+    /// finalizer runs either way.
+    ///
+    /// The exception is swallowed only in that exact case, so anything else still surfaces. Nothing
+    /// is lost by swallowing it: every statement that matters — unparenting the pivot, restoring the
+    /// shadow distance, unsubscribing from the cockpit — has already run by then, and the one that
+    /// did not was about to talk to a unit that no longer exists.
     /// </summary>
     [HarmonyPatch(typeof(CameraChaseState), nameof(CameraChaseState.LeaveState))]
     static class LeaveState
     {
-        static void Postfix()
+        static Exception Finalizer(Exception __exception, CameraStateManager cam)
         {
             UpdateState.ShowMapWidgets(show: true);
             UpdateState.ApplyElementOverrides(inChase: false);
+
+            if (__exception is NullReferenceException && cam != null && cam.followingUnit == null)
+            {
+                if (!_reportedLeaveStateBug)
+                {
+                    _reportedLeaveStateBug = true;
+                    Plugin.Logger.LogInfo(
+                        "Suppressed a vanilla NullReferenceException in CameraChaseState.LeaveState: "
+                        + "it ends by dereferencing followingUnit, which SetFollowingUnit has already "
+                        + "cleared on the path that gets here. Reported once per session.");
+                }
+
+                return null;
+            }
+
+            return __exception;
         }
+
+        private static bool _reportedLeaveStateBug;
     }
 
     /// <summary>
@@ -59,7 +93,7 @@ public class CameraChaseStatePatches
     {
         static void Prefix(ref bool ___showHUD)
         {
-            if (Plugin.Enabled.Value && Plugin.FlightHudInChase.Value)
+            if (Plugin.Enabled.Value && ChaseSettings.FlightHud)
                 ___showHUD = true;
         }
     }
@@ -73,19 +107,41 @@ public class CameraChaseStatePatches
     [HarmonyPatch(typeof(CameraChaseState), nameof(CameraChaseState.UpdateState))]
     static class UpdateState
     {
-        static void Postfix(CameraStateManager cam)
+        /// <summary>
+        /// Skips the vanilla body once the followed unit has gone.
+        ///
+        /// <c>UpdateState</c> guards on <c>followingRB</c> being null but not on <c>followingUnit</c>,
+        /// and the very next thing it does is call <c>CheckInput</c>, which opens with
+        /// <c>cam.followingUnit.definition</c>. After the pilot dies, <c>SetFollowingUnit</c> clears
+        /// that field while the chase state is still the live one, and the method then throws every
+        /// frame until something else moves the camera — several hundred times in a row, with the
+        /// camera never positioned in between.
+        ///
+        /// Nothing is lost by skipping: the frames this replaces were frames that threw before
+        /// reaching any of the placement code. The postfix below still runs, and guards the same
+        /// field itself.
+        /// </summary>
+        static bool Prefix(CameraStateManager cam) => cam != null && cam.followingUnit != null;
+
+        static void Postfix(CameraStateManager cam, float ___viewDistAdjust, float ___FOVAdjustment)
         {
             // Before the free look, and regardless of whether it is switched on at all.
             EnforceHudVisibility();
+
+            if (cam == null || cam.cameraPivot == null || cam.followingUnit == null)
+                return;
+
+            // Before the free look too, so that orbiting composes on top of whichever placement is
+            // live. The free look works off the finished camera rather than off the chase state's
+            // maths, so it does not care which one that was.
+            if (CinematicCamera.Apply(cam, ___viewDistAdjust, ___FOVAdjustment))
+                KeepOutOfTerrain(cam, cam.cameraPivot.position);
 
             if (!Plugin.Enabled.Value || !Plugin.FreeLook.Value)
             {
                 ResetOrbit();
                 return;
             }
-
-            if (cam == null || cam.cameraPivot == null || cam.followingUnit == null)
-                return;
 
             float dt = Time.unscaledDeltaTime;
 
@@ -128,7 +184,12 @@ public class CameraChaseStatePatches
             if (offset.sqrMagnitude < 0.0001f)
                 return;
 
-            Vector3 up = cam.followingUnit.transform.up;
+            // The aircraft's up is the right pan axis for the vanilla placement, whose whole frame is
+            // welded to the airframe: orbiting around anything else would slide relative to the view
+            // it started from. The cinematic camera is built the other way round — its horizon is
+            // level by construction — so panning around a rolling axis would tilt the world back,
+            // which is the one thing that placement exists to avoid.
+            Vector3 up = CinematicCamera.Active ? Vector3.up : cam.followingUnit.transform.up;
 
             // The camera's own right, not a cross product of up and the offset. That cross points
             // to the aircraft's left whenever the camera sits behind it — which is every default
@@ -168,11 +229,26 @@ public class CameraChaseStatePatches
         /// </summary>
         private static void EnforceHudVisibility()
         {
-            if (!Plugin.Enabled.Value || !Plugin.FlightHudInChase.Value)
+            if (!Plugin.Enabled.Value)
                 return;
 
             FlightHud hud = SceneSingleton<FlightHud>.i;
             bool hudActive = hud != null && FlightHudCanvasActive(hud);
+
+            // Which of the two sets of settings applies is decided by ChaseSettings, so switching the
+            // cinematic camera in or out mid-flight swaps the whole HUD over on the next frame with
+            // no separate path to keep in step.
+            if (!ChaseSettings.FlightHud)
+            {
+                // Vanilla already leaves the HUD off in chase, so there is normally nothing to do —
+                // but the mode can be switched on with the HUD already up, and then it has to come
+                // down. Only the canvas is touched: the minimap furniture lives under it and goes
+                // with it, and its own state is left alone so it returns as the config asks.
+                if (hudActive)
+                    FlightHud.EnableCanvas(enable: false);
+
+                return;
+            }
 
             if (DynamicMap.mapMaximized)
             {
@@ -192,7 +268,7 @@ public class CameraChaseStatePatches
             if (hud != null && !hudActive)
                 FlightHud.EnableCanvas(enable: true);
 
-            ShowMapWidgets(Plugin.MapInChase.Value);
+            ShowMapWidgets(ChaseSettings.Map);
             ApplyElementOverrides(inChase: true);
         }
 
@@ -265,7 +341,7 @@ public class CameraChaseStatePatches
             if (hud == null)
                 return;
 
-            bool showLadder = !(inChase && Plugin.HidePitchLadderInChase.Value);
+            bool showLadder = !(inChase && ChaseSettings.HidePitchLadder);
             if (Field(ref _pitchLadderField, "pitchCompassCenter")?.GetValue(hud) is GameObject ladder
                 && ladder.activeSelf != showLadder)
             {
@@ -274,11 +350,26 @@ public class CameraChaseStatePatches
 
             // The weapon HUD states switch the waterline back on whenever the selected weapon
             // changes, so this is re-applied every frame rather than set once.
-            bool showWaterline = !(inChase && Plugin.HideWaterlineInChase.Value);
+            bool showWaterline = !(inChase && ChaseSettings.HideWaterline);
             if (Field(ref _waterlineField, "waterline")?.GetValue(hud) is Behaviour waterline
                 && waterline.enabled != showWaterline)
             {
                 waterline.enabled = showWaterline;
+            }
+
+            // The instrument groups are whole objects rather than fields on the HUD, and which ones
+            // exist depends on the airframe, so they are resolved by component type rather than named
+            // here. See HudElements.
+            if (inChase)
+            {
+                HudElements.Apply(
+                    ChaseSettings.HideLeftInstruments,
+                    ChaseSettings.HideRightInstruments,
+                    ChaseSettings.HideCompass);
+            }
+            else
+            {
+                HudElements.ShowAll();
             }
         }
 

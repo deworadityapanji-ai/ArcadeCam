@@ -35,6 +35,18 @@ static class RewiredAwakePatches
             Name = Plugin.ACTION_TOGGLE,
             Descriptive = "Chase Cam Toggle",
             Store = id => Plugin.ToggleActionId = id
+        },
+        new ActionDefinition
+        {
+            Name = Plugin.ACTION_CINEMATIC,
+            Descriptive = "Cinematic Chase Cam",
+            Store = id => Plugin.CinematicActionId = id
+        },
+        new ActionDefinition
+        {
+            Name = Plugin.ACTION_COCKPIT_HOLD,
+            Descriptive = "Cockpit View (Hold)",
+            Store = id => Plugin.CockpitHoldActionId = id
         }
     };
 
