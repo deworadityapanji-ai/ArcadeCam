@@ -31,7 +31,7 @@ public class CombatHUDPatches
 
         static void Prefix(Unit hitUnit)
         {
-            if (!Plugin.Enabled.Value || !Plugin.HitSoundOutsideCockpit.Value)
+            if (!Plugin.HitSoundOutsideCockpit.Value)
                 return;
 
             // Respect the game's own toggle: no markers means no hit feedback, audio included.

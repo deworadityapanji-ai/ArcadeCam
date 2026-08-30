@@ -93,7 +93,7 @@ public class CameraChaseStatePatches
     {
         static void Prefix(ref bool ___showHUD)
         {
-            if (Plugin.Enabled.Value && ChaseSettings.FlightHud)
+            if (Plugin.FlightHud.Value)
                 ___showHUD = true;
         }
     }
@@ -123,7 +123,7 @@ public class CameraChaseStatePatches
         /// </summary>
         static bool Prefix(CameraStateManager cam) => cam != null && cam.followingUnit != null;
 
-        static void Postfix(CameraStateManager cam, float ___viewDistAdjust, float ___FOVAdjustment)
+        static void Postfix(CameraStateManager cam, float ___viewDistAdjust)
         {
             // Before the free look, and regardless of whether it is switched on at all.
             EnforceHudVisibility();
@@ -134,14 +134,8 @@ public class CameraChaseStatePatches
             // Before the free look too, so that orbiting composes on top of whichever placement is
             // live. The free look works off the finished camera rather than off the chase state's
             // maths, so it does not care which one that was.
-            if (CinematicCamera.Apply(cam, ___viewDistAdjust, ___FOVAdjustment))
+            if (CinematicCamera.Apply(cam, ___viewDistAdjust))
                 KeepOutOfTerrain(cam, cam.cameraPivot.position);
-
-            if (!Plugin.Enabled.Value || !Plugin.FreeLook.Value)
-            {
-                ResetOrbit();
-                return;
-            }
 
             float dt = Time.unscaledDeltaTime;
 
@@ -152,21 +146,19 @@ public class CameraChaseStatePatches
 
             if (held)
             {
-                // Same shape as the cockpit free look, so both views feel alike. Follows the game's
-                // own invert-pitch preference, with a config switch on top for anyone who wants the
-                // chase orbit to go the other way without disturbing the cockpit view.
-                bool invertPitch = PlayerSettings.viewInvertPitch ^ Plugin.InvertFreeLookPitch.Value;
-                float invert = invertPitch ? -1f : 1f;
+                // Same shape as the cockpit free look, so both views feel alike, and it follows
+                // the game's own invert-pitch preference rather than offering a second one.
+                float invert = PlayerSettings.viewInvertPitch ? -1f : 1f;
                 float sensitivity = PlayerSettings.viewSensitivity * Plugin.FreeLookSensitivity.Value;
 
                 _desiredPan += GameManager.playerInput.GetAxis("Pan View") * 120f * sensitivity * dt;
                 _desiredTilt += GameManager.playerInput.GetAxis("Tilt View") * 120f * sensitivity * dt * invert;
 
-                float maxPitch = Mathf.Clamp(Plugin.FreeLookMaxPitch.Value, 0f, 89f);
+                const float maxPitch = 85f;
                 _desiredPan = Mathf.Clamp(_desiredPan, -180f, 180f);
                 _desiredTilt = Mathf.Clamp(_desiredTilt, -maxPitch, maxPitch);
             }
-            else if (Plugin.RecenterOnRelease.Value)
+            else
             {
                 _desiredPan = 0f;
                 _desiredTilt = 0f;
@@ -229,16 +221,13 @@ public class CameraChaseStatePatches
         /// </summary>
         private static void EnforceHudVisibility()
         {
-            if (!Plugin.Enabled.Value)
-                return;
-
             FlightHud hud = SceneSingleton<FlightHud>.i;
             bool hudActive = hud != null && FlightHudCanvasActive(hud);
 
-            // Which of the two sets of settings applies is decided by ChaseSettings, so switching the
-            // cinematic camera in or out mid-flight swaps the whole HUD over on the next frame with
-            // no separate path to keep in step.
-            if (!ChaseSettings.FlightHud)
+            // One set of settings covers both chase cameras. They differ in where they point, not
+            // in what the HUD is drawn on, and someone who wants instruments in third person wants
+            // them in third person.
+            if (!Plugin.FlightHud.Value)
             {
                 // Vanilla already leaves the HUD off in chase, so there is normally nothing to do —
                 // but the mode can be switched on with the HUD already up, and then it has to come
@@ -268,7 +257,7 @@ public class CameraChaseStatePatches
             if (hud != null && !hudActive)
                 FlightHud.EnableCanvas(enable: true);
 
-            ShowMapWidgets(ChaseSettings.Map);
+            ShowMapWidgets(Plugin.Map.Value);
             ApplyElementOverrides(inChase: true);
         }
 
@@ -341,7 +330,7 @@ public class CameraChaseStatePatches
             if (hud == null)
                 return;
 
-            bool showLadder = !(inChase && ChaseSettings.HidePitchLadder);
+            bool showLadder = !inChase || Plugin.PitchLadder.Value;
             if (Field(ref _pitchLadderField, "pitchCompassCenter")?.GetValue(hud) is GameObject ladder
                 && ladder.activeSelf != showLadder)
             {
@@ -350,11 +339,32 @@ public class CameraChaseStatePatches
 
             // The weapon HUD states switch the waterline back on whenever the selected weapon
             // changes, so this is re-applied every frame rather than set once.
-            bool showWaterline = !(inChase && ChaseSettings.HideWaterline);
+            bool showWaterline = !inChase || Plugin.Waterline.Value;
             if (Field(ref _waterlineField, "waterline")?.GetValue(hud) is Behaviour waterline
                 && waterline.enabled != showWaterline)
             {
                 waterline.enabled = showWaterline;
+            }
+
+            // Only the Image is switched off, never the GameObject. PlayerAxisControls keeps the
+            // virtual joystick's deflection in virtualJoystickPos.transform.localPosition and reads
+            // pitch, roll and yaw straight back out of it, so deactivating the object would take the
+            // stick away along with its indicator. The game drives the same object through SetActive
+            // and its colour and never touches enabled, so there is nothing here to fight over.
+            //
+            // Reached by reflection and held as Behaviour rather than Image, like the waterline
+            // above: the mod does not reference UnityEngine.UI, and enabled is all it needs.
+            bool showStick = !inChase || Plugin.VirtualJoystickIndicator.Value;
+            if (Field(ref _joystickPosField, "virtualJoystickPos")?.GetValue(hud) is Behaviour knob
+                && knob.enabled != showStick)
+            {
+                knob.enabled = showStick;
+            }
+
+            if (Field(ref _joystickVectorField, "virtualJoystickVector")?.GetValue(hud) is Behaviour vector
+                && vector.enabled != showStick)
+            {
+                vector.enabled = showStick;
             }
 
             // The instrument groups are whole objects rather than fields on the HUD, and which ones
@@ -363,9 +373,9 @@ public class CameraChaseStatePatches
             if (inChase)
             {
                 HudElements.Apply(
-                    ChaseSettings.HideLeftInstruments,
-                    ChaseSettings.HideRightInstruments,
-                    ChaseSettings.HideCompass);
+                    Plugin.LeftInstruments.Value,
+                    Plugin.RightInstruments.Value,
+                    Plugin.Compass.Value);
             }
             else
             {
@@ -375,6 +385,8 @@ public class CameraChaseStatePatches
 
         private static FieldInfo _pitchLadderField;
         private static FieldInfo _waterlineField;
+        private static FieldInfo _joystickPosField;
+        private static FieldInfo _joystickVectorField;
 
         private static FieldInfo Field(ref FieldInfo cache, string name) =>
             cache ??= AccessTools.Field(typeof(FlightHud), name);

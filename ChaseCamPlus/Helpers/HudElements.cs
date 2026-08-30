@@ -59,7 +59,7 @@ internal static class HudElements
     /// repair, so switching aircraft or camera mode is picked up without anything having to announce
     /// it. <c>SetActive</c> is only called when a group is actually in the wrong state.
     /// </summary>
-    internal static void Apply(bool hideLeft, bool hideRight, bool hideCompass)
+    internal static void Apply(bool showLeft, bool showRight, bool showCompass)
     {
         FlightHud hud = SceneSingleton<FlightHud>.i;
         if (hud == null)
@@ -71,9 +71,9 @@ internal static class HudElements
         if (_root != hud.transform || IsStale())
             Rescan(hud);
 
-        Show(Left, !hideLeft);
-        Show(Right, !hideRight);
-        Show(Compass, !hideCompass);
+        Show(Left, showLeft);
+        Show(Right, showRight);
+        Show(Compass, showCompass);
     }
 
     /// <summary>Puts every group back, for leaving chase.</summary>

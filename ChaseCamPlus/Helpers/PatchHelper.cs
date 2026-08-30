@@ -15,7 +15,7 @@ public static class PatchHelper
     {
         CameraMode actual = CameraStateManager.cameraMode;
 
-        if (!Plugin.Enabled.Value || !Plugin.VirtualJoystickInChase.Value)
+        if (!Plugin.VirtualJoystick.Value)
             return actual;
 
         if (actual != CameraMode.chase)
@@ -37,7 +37,7 @@ public static class PatchHelper
     /// </summary>
     public static float CorrectDefaultFoV()
     {
-        if (!Plugin.Enabled.Value || !Plugin.FixWeaponFoV.Value)
+        if (!Plugin.FixWeaponFoV.Value)
             return PlayerSettings.defaultFoV;
 
         CameraStateManager cam = SceneSingleton<CameraStateManager>.i;
@@ -73,10 +73,10 @@ public static class PatchHelper
         if (cam == null)
             return null;
 
-        // Opened in chase whichever way TurretAimInChase is set: with it on the turret follows the
+        // Opened in chase whichever way TurretAim is set: with it on the turret follows the
         // camera, with it off it still needs to be told to sit on the nose rather than be left
         // frozen. What the turret is actually given is decided in AimDirection.
-        if (Plugin.Enabled.Value && cam.currentState == cam.chaseState)
+        if (cam.currentState == cam.chaseState)
             return cam.currentState;
 
         return cam.cockpitState;
@@ -86,7 +86,7 @@ public static class PatchHelper
     /// Substituted for the camera's <c>forward</c> read that feeds the turret in
     /// <c>Turret.FixedUpdate</c>, so the direction can differ from the camera's in chase.
     ///
-    /// With <c>TurretAimInChase</c> off the turret is pinned to the aircraft's nose, which turns it
+    /// With <c>TurretAim</c> off the turret is pinned to the aircraft's nose, which turns it
     /// into a fixed forward gun for as long as you are in chase. That is a deliberate choice over
     /// simply leaving it alone: vanilla's frozen turret keeps whatever heading it held when the
     /// cockpit was left, and a weapon aimed somewhere you can neither see nor correct is worse than
@@ -100,9 +100,6 @@ public static class PatchHelper
         if (cameraTransform == null)
             return Vector3.forward;
 
-        if (!Plugin.Enabled.Value)
-            return cameraTransform.forward;
-
         CameraStateManager cam = SceneSingleton<CameraStateManager>.i;
         if (cam == null || cam.currentState != cam.chaseState)
             return cameraTransform.forward;
@@ -111,7 +108,7 @@ public static class PatchHelper
         // because its forward no longer runs out ahead of the aircraft but back towards it, so a
         // turret slaved to it points at the ground below you. That is a poor default but a legitimate
         // choice, and the config says which it is rather than this deciding.
-        if (ChaseSettings.TurretFollowsCamera)
+        if (Plugin.TurretAim.Value)
             return cameraTransform.forward;
 
         return GameManager.GetLocalAircraft(out Aircraft aircraft) && aircraft != null
@@ -122,9 +119,6 @@ public static class PatchHelper
     /// <summary>True while the user holds the mod's own free look binding.</summary>
     public static bool FreeLookHeld()
     {
-        if (!Plugin.Enabled.Value || !Plugin.FreeLook.Value)
-            return false;
-
         if (Plugin.FreeLookActionId < 0)
             return false;
 

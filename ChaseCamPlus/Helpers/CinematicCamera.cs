@@ -6,18 +6,23 @@ namespace ChaseCamPlus.Helpers;
 /// A cinematic chase camera, where the aircraft is allowed to rotate and drift inside the frame
 /// instead of the world rotating around it.
 ///
-/// Three things separate it from the vanilla chase state, all visible frame by frame in reference
+/// Five things separate it from the vanilla chase state, all visible frame by frame in reference
 /// footage:
 ///
 /// <list type="number">
-/// <item>The horizon never tilts. Through a full roll the aircraft turns over and the world stays
-/// level, so roll is not attenuated — it is simply not followed at all.</item>
+/// <item>The horizon never tilts, at any bank angle, in either direction, upright or inverted. The
+/// camera's own up vector is simply the world's.</item>
+/// <item>The camera's <em>position</em>, on the other hand, is carried all the way round by the roll.
+/// Level, it sits above the aircraft and the aircraft rides low in the frame; ninety degrees of bank
+/// puts it out to the side and the aircraft across the frame; a full roll walks the aircraft round a
+/// circle centred on the middle of the screen. These first two look contradictory and are not: the
+/// rig rolls, the horizon does not. See <see cref="UpdateRollReference"/>.</item>
+/// <item>It aims along the boom rather than at the aircraft, which is what lets any of that be seen.
+/// A camera that aims at what it is following re-centres the aircraft every frame, so the boom can
+/// swing as much as it likes and only the background will move. See <see cref="UpdateRotation"/>.</item>
 /// <item>The boom is anchored to the <em>flight path</em>, not to the nose. During a hard pull the
 /// aircraft sits visibly nose-high in the frame for seconds at a time, which only happens if the
 /// camera is lined up with where the aircraft is going rather than where it is pointing.</item>
-/// <item>That anchor is heavily damped. In a loop the camera does eventually come all the way over
-/// the top and point down, so nothing is clamped — it is just late, and the lateness is the whole
-/// effect.</item>
 /// <item>The camera flies a course of its own, so the aircraft wanders across the frame rather than
 /// only turning in place. See <see cref="UpdateOffset"/>, which is where that has to be earned back
 /// after being lost to the floating origin.</item>
@@ -34,10 +39,14 @@ namespace ChaseCamPlus.Helpers;
 /// velocity, a rotation. None of it is a world position, because the game runs a
 /// <see cref="FloatingOrigin"/> that shifts the world out from under the camera; a cached absolute
 /// position would survive that shift as a wrong one.
+///
+/// The numbers live in <see cref="CinematicTuning"/>. There is no configuration: the
+/// <c>Chase Camera Roll Toggle</c> binding chooses between this camera and the game's own, and
+/// nothing else about it is adjustable.
 /// </summary>
 internal static class CinematicCamera
 {
-    /// <summary>Hand-over time to and from the vanilla placement, in seconds.</summary>
+    /// <summary>Hand-over time from the vanilla placement on entering chase, in seconds.</summary>
     private const float TransitionTime = 0.35f;
 
     /// <summary>
@@ -66,9 +75,6 @@ internal static class CinematicCamera
     /// </summary>
     private const float CruiseSpeedLag = 3f;
 
-    /// <summary>How long the mode's field of view takes to follow the FoV axis, in seconds.</summary>
-    private const float FovLag = 0.15f;
-
     private static bool _on;
     private static float _blend;
     private static bool _settled;
@@ -78,22 +84,24 @@ internal static class CinematicCamera
     private static Vector3 _offsetVelocity;
     private static Vector3 _lastVelocity;
     private static Vector3 _lastRight = Vector3.right;
+    private static Vector3 _rollReference = Vector3.up;
     private static Quaternion _rotation = Quaternion.identity;
     private static Vector3 _course;
     private static float _stretch;
     private static float _cruiseSpeed;
-    private static float _fov;
 
     /// <summary>
-    /// Whether the mode is switched on. Says nothing about which camera is live — callers that care
-    /// (the turret, the HUD) are already inside a chase-only path.
+    /// Whether this camera is the one in use. Says nothing about which camera <em>state</em> is live —
+    /// callers that care (the turret, the HUD) are already inside a chase-only path.
     /// </summary>
-    internal static bool Active => _on && Plugin.Enabled.Value && Plugin.CinematicChaseCam.Value;
+    internal static bool Active => _on;
 
     /// <summary>
     /// Drops the smoothing state so the next frame places the camera outright instead of easing in
-    /// from wherever the last chase session left it. Called when the chase state is entered and
-    /// whenever the mode is toggled.
+    /// from wherever the last chase session left it. Called when the chase state is entered.
+    ///
+    /// Deliberately does not touch <c>_on</c>. Which of the two cameras you chose is not part of the
+    /// smoothing, so leaving the cockpit and coming back returns you to the one you were using.
     /// </summary>
     internal static void Reset()
     {
@@ -103,43 +111,31 @@ internal static class CinematicCamera
         _stretch = 0f;
     }
 
-    /// <summary>Reads the toggle binding. Mirrors the guards <see cref="CameraToggle"/> applies.</summary>
+    /// <summary>
+    /// Reads the toggle binding. Mirrors the guards <see cref="CameraToggle"/> applies, so menus,
+    /// the map, the radial menu, the pause screen and the camera picker all suppress it.
+    ///
+    /// A plain toggle, and nothing else: pressed outside the chase view it still swaps which camera
+    /// you will get, but it does not move you to one. The key is a property of the chase camera
+    /// rather than a way of reaching it, and <see cref="CameraToggle"/> is what gets you there.
+    /// </summary>
     internal static void Poll()
     {
-        if (!Plugin.Enabled.Value || !Plugin.CinematicChaseCam.Value)
-            return;
-
-        if (Plugin.CinematicActionId < 0)
+        if (Plugin.CameraRollActionId < 0)
             return;
 
         var player = GameManager.playerInput;
-        if (player == null || !player.GetButtonDown(Plugin.CinematicActionId))
+        if (player == null || !player.GetButtonDown(Plugin.CameraRollActionId))
             return;
 
+        // The game's own "is the player actually flying" flag, checked by both the cockpit and chase
+        // states before they read any input.
         if (!GameManager.flightControlsEnabled)
-            return;
-
-        CameraStateManager cam = SceneSingleton<CameraStateManager>.i;
-        if (cam == null)
             return;
 
         CameraControlUI picker = SceneSingleton<CameraControlUI>.i;
         if (picker != null && picker.isOpen)
             return;
-
-        // Pressed from anywhere but chase, the key means "show me this" rather than nothing: switch
-        // camera and switch the mode on together. The guard is the one CameraChaseState.EnterState
-        // imposes on itself — it diverts to the orbit camera when it is not following an aircraft.
-        if (cam.currentState != cam.chaseState)
-        {
-            if (cam.followingUnit is not Aircraft)
-                return;
-
-            _on = true;
-            Reset();
-            cam.SwitchState(cam.chaseState);
-            return;
-        }
 
         _on = !_on;
 
@@ -152,26 +148,16 @@ internal static class CinematicCamera
 
     /// <summary>
     /// Replaces the placement <c>CameraChaseState.UpdateState</c> has just computed. Runs after it
-    /// rather than instead of it so the FoV, the zoom, the numpad presets, the doppler and the wind
-    /// noise all keep working, and so the vanilla result is available to blend against.
+    /// rather than instead of it so the field of view, the zoom, the numpad presets, the doppler and
+    /// the wind noise all keep working, and so the vanilla result is available to blend against.
     /// </summary>
     /// <param name="zoom">
     /// The chase state's own <c>viewDistAdjust</c>, applied the same way vanilla applies it, so the
     /// zoom axis still lengthens the boom in this mode.
     /// </param>
-    /// <param name="fovAdjust">
-    /// The chase state's own <c>FOVAdjustment</c> — the player's FoV axis — so it keeps working on
-    /// top of this mode's own field of view.
-    /// </param>
     /// <returns>True when the camera was moved, so the caller can re-run terrain avoidance.</returns>
-    internal static bool Apply(CameraStateManager cam, float zoom, float fovAdjust)
+    internal static bool Apply(CameraStateManager cam, float zoom)
     {
-        if (!Plugin.Enabled.Value || !Plugin.CinematicChaseCam.Value)
-        {
-            Reset();
-            return false;
-        }
-
         if (cam == null || cam.cameraPivot == null || cam.followingUnit == null
             || cam.followingRB == null || cam.followingUnit.definition == null)
         {
@@ -179,7 +165,7 @@ internal static class CinematicCamera
         }
 
         // Switched off and already fully handed back: leave the transform completely alone, so with
-        // the mode idle this costs nothing and changes nothing.
+        // the game's own camera selected this costs nothing and changes nothing.
         if (!_on && _blend <= 0f)
         {
             _settled = false;
@@ -199,24 +185,30 @@ internal static class CinematicCamera
         Quaternion vanillaRotation = cam.transform.rotation;
 
         UpdateAnchor(aircraft, velocity, dt);
+        UpdateRollReference(aircraft, dt);
 
         float stretch = UpdateStretch(velocity, dt);
         float cruise = UpdateCruiseSpeed(velocity.magnitude, dt);
 
+        // The field of view the frame will actually render at, which the chase state has already
+        // written by the time this runs — the player's External Field of View setting with their FoV
+        // axis folded in. The composition is stated in fractions of the frame and the angles are
+        // worked back out of this, so both follow the player's own view setting rather than fighting
+        // it. Nothing here writes the field of view.
+        float fov = cam.mainCamera != null ? cam.mainCamera.fieldOfView : 60f;
+
         Quaternion boom = BoomRotation();
-        Vector3 target = boom * BoomOffset(cam.followingUnit.definition, cruise, stretch, zoom);
+        Vector3 target = boom * BoomOffset(
+            cam.followingUnit.definition, cruise, stretch, zoom, RideHeight(fov));
 
         UpdateOffset(target, velocity, dt);
-        UpdateRotation(dt);
+        UpdateRotation(dt, FramingPitch(fov));
 
         // MoveTowards rather than a damped approach: an ease that never quite arrives would leave
         // the mode permanently a few percent short of itself.
         _blend = Mathf.MoveTowards(_blend, _on ? 1f : 0f, dt / TransitionTime);
         float t = Mathf.SmoothStep(0f, 1f, _blend);
 
-        // Before the guard, which measures against the FoV and so has to see the one this frame will
-        // actually render at rather than the one vanilla left behind.
-        ApplyFieldOfView(cam.mainCamera, fovAdjust, dt, t);
         ApplyFramingGuard(cam.mainCamera);
 
         cam.transform.SetPositionAndRotation(
@@ -238,32 +230,53 @@ internal static class CinematicCamera
         float speed = velocity.magnitude;
         Vector3 nose = aircraft.forward;
 
-        Vector3 flight = speed > 0.001f
+        Vector3 wanted = speed > 0.001f
             ? Vector3.Slerp(nose, velocity / speed, Mathf.InverseLerp(SlowSpeed, FlyingSpeed, speed))
             : nose;
 
-        // Anchoring to the nose instead is what the vanilla camera does, so this doubles as the dial
-        // between the two behaviours.
-        Vector3 wanted = Vector3.Slerp(nose, flight, Mathf.Clamp01(CinematicPresets.FlightPathAnchor));
-
         _anchor = _settled
-            ? Vector3.Slerp(_anchor, wanted, Damping(CinematicPresets.BoomLag, dt)).normalized
+            ? Vector3.Slerp(_anchor, wanted, Damping(CinematicTuning.BoomLag, dt)).normalized
             : wanted;
     }
 
     /// <summary>
-    /// Builds the boom frame from the anchor with the world's up as its reference, which is what
-    /// keeps the horizon level: the frame's own up always lies in the vertical plane through the
-    /// anchor, so no roll can enter.
+    /// Damps the aircraft's own up vector. This is what carries the boom round in a roll, and it is
+    /// the single thing that separates a camera the aircraft rolls <em>under</em> from one it rolls
+    /// <em>beside</em>.
     ///
-    /// <c>Quaternion.LookRotation(dir, Vector3.up)</c> would do the same until the aircraft goes
-    /// vertical, where the two arguments become parallel and the result is undefined — and a loop
-    /// passes straight through that. Constructing the basis by hand makes the degenerate case
-    /// nameable: hold the azimuth the camera had a frame ago rather than let it spin arbitrarily.
+    /// Built on the world's up instead — which is what this camera did before it was measured
+    /// properly — an aileron roll moves the camera not at all and the aircraft merely spins on the
+    /// spot in the middle of the frame. Carried, the camera swings round the roll axis with the
+    /// aircraft, and since it is riding above the aircraft rather than on its axis, the aircraft is
+    /// walked round a circle in the frame: low when level, out to one side at ninety degrees of bank,
+    /// high when inverted.
+    ///
+    /// None of that tilts the horizon. The camera's own up vector is the world's, and stays the
+    /// world's — see <see cref="UpdateRotation"/>. The rig rolls; the picture does not.
+    /// </summary>
+    private static void UpdateRollReference(Transform aircraft, float dt)
+    {
+        Vector3 up = aircraft.up;
+
+        _rollReference = _settled
+            ? Vector3.Slerp(_rollReference, up, Damping(CinematicTuning.RollLag, dt)).normalized
+            : up;
+    }
+
+    /// <summary>
+    /// Builds the boom frame from the anchor and the aircraft's damped up vector, so the frame rolls
+    /// with the aircraft.
+    ///
+    /// <c>Quaternion.LookRotation(dir, reference)</c> would do the same until the two arguments become
+    /// parallel, where the result is undefined. Constructing the basis by hand makes the degenerate
+    /// case nameable: hold the azimuth the camera had a frame ago rather than let it spin arbitrarily.
+    /// With the reference carried by the aircraft it is barely reachable — an aircraft's up and its
+    /// flight path are ninety degrees apart in anything but a stall — but a stall is exactly where a
+    /// camera flipping over would be least welcome.
     /// </summary>
     private static Quaternion BoomRotation()
     {
-        Vector3 right = Vector3.Cross(Vector3.up, _anchor);
+        Vector3 right = Vector3.Cross(_rollReference, _anchor);
 
         if (right.sqrMagnitude < 0.0001f)
             right = _lastRight;
@@ -289,7 +302,7 @@ internal static class CinematicCamera
     ///
     /// Computed as an explicit length rather than by pushing the position spring around, which is how
     /// a first version did it. That version was both far too weak to see and impossible to tune, since
-    /// its strength fell out of <c>PositionSmoothing</c> — a setting about something else entirely.
+    /// its strength fell out of the position smoothing — a number about something else entirely.
     /// </summary>
     private static float UpdateStretch(Vector3 velocity, float dt)
     {
@@ -304,7 +317,7 @@ internal static class CinematicCamera
         _lastVelocity = velocity;
 
         Vector3 turning = acceleration - Vector3.Project(acceleration, _anchor);
-        float target = turning.magnitude / 9.81f * CinematicPresets.StretchPerG;
+        float target = turning.magnitude / 9.81f * CinematicTuning.StretchPerG;
 
         _stretch = _settled ? Mathf.Lerp(_stretch, target, Damping(StretchLag, dt)) : target;
         return _stretch;
@@ -318,30 +331,32 @@ internal static class CinematicCamera
     }
 
     /// <summary>
-    /// Where the camera wants to sit in the boom frame: behind, and a little above so the aircraft
-    /// is seen slightly from the top rather than edge on.
+    /// Where the camera wants to sit in the boom frame: behind, and above, by enough that the roll
+    /// carries the aircraft round a visible circle rather than a point.
     ///
     /// The base length is the game's own <c>orbitDist</c> formula, so an aircraft of any size gets a
-    /// boom proportional to it, and the config scales that rather than replacing it. On top of that
-    /// go two independent terms: a gentle pullback for an aircraft that is simply travelling fast,
-    /// and the stretch a hard turn puts into it. Both move the camera rather than widening the FoV,
-    /// so neither can fight the player's FoV axis or the weapon-FoV workaround.
+    /// boom proportional to it, and <see cref="CinematicTuning.Distance"/> scales that rather than
+    /// replacing it. On top of that go two independent terms: a gentle pullback for an aircraft that
+    /// is simply travelling fast, and the stretch a hard turn puts into it. Both move the camera
+    /// rather than widening the field of view, so neither can fight the player's FoV axis or the
+    /// weapon-FoV workaround.
     ///
     /// The stretch is added in metres, after the zoom, because it is a physical falling-behind rather
     /// than a change to how long the boom is meant to be.
     /// </summary>
-    private static Vector3 BoomOffset(UnitDefinition definition, float cruiseSpeed, float stretch, float zoom)
+    private static Vector3 BoomOffset(
+        UnitDefinition definition, float cruiseSpeed, float stretch, float zoom, float height)
     {
         float size = Mathf.Max(definition.length, definition.width * 0.7f)
                      + Mathf.Max(definition.width, definition.length * 0.7f);
 
-        float fast = Mathf.InverseLerp(Plugin.CineSpeedLow.Value, Plugin.CineSpeedHigh.Value, cruiseSpeed);
+        float fast = Mathf.InverseLerp(CinematicTuning.SpeedLow, CinematicTuning.SpeedHigh, cruiseSpeed);
         float distance = size
-                         * Mathf.Max(Plugin.CineDistance.Value, 0.1f)
-                         * (1f + CinematicPresets.SpeedPullback * fast)
+                         * CinematicTuning.Distance
+                         * (1f + CinematicTuning.SpeedPullback * fast)
                          * (1f + Mathf.Max(zoom, 0f));
 
-        return new Vector3(0f, distance * Plugin.CineHeight.Value, -(distance + stretch));
+        return new Vector3(0f, distance * height, -(distance + stretch));
     }
 
     /// <summary>
@@ -372,84 +387,97 @@ internal static class CinematicCamera
             return;
         }
 
-        _course = Vector3.Lerp(_course, velocity, Damping(CinematicPresets.PathLag, dt));
+        _course = Vector3.Lerp(_course, velocity, Damping(CinematicTuning.PathLag, dt));
         _offset += (_course - velocity) * dt;
 
         _offset = Vector3.SmoothDamp(
             _offset, target, ref _offsetVelocity,
-            Mathf.Max(CinematicPresets.PositionSmoothing, 0.001f), float.PositiveInfinity, dt);
+            Mathf.Max(CinematicTuning.PositionSmoothing, 0.001f), float.PositiveInfinity, dt);
     }
 
     /// <summary>
-    /// Aims at the aircraft, damped on its own much shorter time constant.
+    /// Turns the camera along the boom, damped on its own much shorter time constant than the boom's.
     ///
-    /// The gap between this and the boom's lag is what produces the look: with one time constant the
-    /// camera would only feel soft, while a slow arm under a quick aim lets the aircraft swing across
-    /// the frame and be caught. <see cref="Plugin.CineFramingPitch"/> then aims a few degrees above it,
-    /// which is what seats the aircraft below the centre of the frame — the boom's own height offset
-    /// cannot do that, since aiming at the aircraft cancels it exactly.
+    /// Along the boom, not at the aircraft. Aiming at the aircraft is the intuitive choice and it
+    /// quietly destroys everything the boom is doing: a camera that re-aims at what it follows puts
+    /// it back in the middle of the frame every frame, so a rolled boom moves the background and
+    /// nothing else, and the whole circle a roll is meant to walk the aircraft round collapses to the
+    /// aircraft spinning on the spot. That the reference aims along the boom is provable without any
+    /// dynamics at all: in steady level flight it seats the aircraft well below the centre, where a
+    /// camera aiming at the aircraft would have it dead centre by construction.
+    ///
+    /// The gap between this lag and the boom's is what produces the look. With one time constant the
+    /// camera would only feel soft; a slow arm under a quick aim lets the aircraft swing across the
+    /// frame and be caught. <paramref name="framingPitch"/> then offsets the aim from the boom axis,
+    /// which is what settles where in the frame the aircraft finally sits.
+    ///
+    /// The up vector is the world's, and that is the whole of why the horizon stays level — including
+    /// when the boom frame this is hanging off has been rolled ninety degrees by the aircraft.
     /// </summary>
-    private static void UpdateRotation(float dt)
+    private static void UpdateRotation(float dt, float framingPitch)
     {
-        Vector3 look = -_offset;
-        if (look.sqrMagnitude < 0.0001f)
-            look = _anchor;
-
         // Looking very nearly straight up or down, world up stops being a usable reference for the
         // same reason it does in BoomRotation. Keep the roll the camera already had.
-        Vector3 up = Mathf.Abs(Vector3.Dot(look.normalized, Vector3.up)) > 0.999f
+        Vector3 up = Mathf.Abs(Vector3.Dot(_anchor, Vector3.up)) > 0.999f
             ? _rotation * Vector3.up
             : Vector3.up;
 
-        Quaternion target = Quaternion.LookRotation(look, up)
-                            * Quaternion.Euler(-Plugin.CineFramingPitch.Value, 0f, 0f);
+        Quaternion target = Quaternion.LookRotation(_anchor, up)
+                            * Quaternion.Euler(-framingPitch, 0f, 0f);
 
         _rotation = _settled
-            ? Quaternion.Slerp(_rotation, target, Damping(CinematicPresets.AimLag, dt))
+            ? Quaternion.Slerp(_rotation, target, Damping(CinematicTuning.AimLag, dt))
             : target;
     }
 
     /// <summary>
-    /// Gives the mode its own field of view.
+    /// How far above the flight path the camera rides, as a fraction of the boom length.
     ///
-    /// This is not a convenience. <see cref="Plugin.CineFramingPitch"/> is an angle, so how far below
-    /// centre the aircraft sits depends on the FoV: six degrees is 40% of the way to the edge at 30
-    /// and half that at 60. The whole geometry here was calibrated against a narrow view, and reading
-    /// the game's external FoV — which players set for a wide situational view in ordinary chase —
-    /// would hand this mode a composition it was never measured for.
+    /// The composition is stated in the unit it was measured in — a fraction of the frame — and the
+    /// ratio follows from the field of view, a point <c>f</c> of the frame height off centre sitting
+    /// at <c>2f·tan(fov/2)</c>. That is the more honest unit for anything about where things sit on
+    /// screen: a fixed ratio silently recomposes the shot every time the field of view moves, and the
+    /// field of view here belongs to the player.
     ///
-    /// Written straight onto the camera rather than through <c>desiredFOV</c>, which the chase state
-    /// lerps towards. Editing that would leak: <c>SwitchState</c> reseeds it from whatever the camera
-    /// currently reads, so this mode's value would follow the player into the next camera. Overriding
-    /// the finished result instead leaves no state to restore — stop writing and vanilla's own lerp
-    /// takes the FoV back on its own.
-    ///
-    /// The player's FoV axis still applies on top, clamped to the same 20–120 the chase state uses.
+    /// It also fixes the size of the circle a roll walks the aircraft round, the two being the same
+    /// angle measured from the boom axis.
     /// </summary>
-    private static void ApplyFieldOfView(Camera camera, float fovAdjust, float dt, float blend)
+    private static float RideHeight(float fov) =>
+        2f * CinematicTuning.BoomRise * HalfFrameTangent(fov);
+
+    /// <summary>
+    /// Degrees the camera aims above the boom axis. See <see cref="RideHeight"/>.
+    ///
+    /// This comes out <em>negative</em>, and that is not a slip. Aiming at the aircraft leaves it
+    /// dead centre and has to lift the aim to seat it anywhere else; aiming along a boom that is
+    /// already riding above the aircraft starts with it too low, and framing means dropping the aim
+    /// to bring it back up. Same convention, opposite sign, because the two aims start from opposite
+    /// places.
+    /// </summary>
+    private static float FramingPitch(float fov)
     {
-        if (camera == null || Plugin.CineFov.Value <= 0f)
-            return;
-
-        float wanted = Mathf.Clamp(Plugin.CineFov.Value + fovAdjust, 20f, 120f);
-        _fov = _settled ? Mathf.Lerp(_fov, wanted, Damping(FovLag, dt)) : wanted;
-
-        camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, _fov, blend);
+        float t = HalfFrameTangent(fov);
+        float rise = Mathf.Atan(2f * CinematicTuning.BoomRise * t);
+        float seat = Mathf.Atan(2f * CinematicTuning.Seat * t);
+        return -(rise - seat) * Mathf.Rad2Deg;
     }
+
+    /// <summary>Tangent of the vertical half-angle, which is the whole of the screen-fraction conversion.</summary>
+    private static float HalfFrameTangent(float fov) =>
+        Mathf.Tan(Mathf.Clamp(fov, 1f, 179f) * 0.5f * Mathf.Deg2Rad);
 
     /// <summary>
     /// Hard bound on how far the aircraft may drift from where the camera is pointing.
     ///
     /// Lag is the point of this camera, but two sources of it push the same way and compound: the
-    /// aim trails the aircraft during a sustained pull, and <see cref="Plugin.CineFramingPitch"/> is
-    /// already aiming above it. Through a loop that put the aircraft against the bottom edge with
-    /// half a frame of empty sky over it — the drift had stopped being character and started being a
-    /// framing failure.
+    /// aim trails the aircraft during a sustained pull, and the framing pitch has already moved it.
+    /// Through a loop that put the aircraft against the bottom edge with half a frame of empty sky
+    /// over it — the drift had stopped being character and started being a framing failure.
     ///
     /// This only ever removes excess, so below the limit the lag behaves exactly as before and
     /// nothing about the feel changes. Expressed as a fraction of the vertical half-FoV rather than
-    /// in degrees so it means the same thing at any zoom: at a narrow FoV a few degrees is most of
-    /// the frame, at a wide one it is nothing.
+    /// in degrees so it means the same thing at any zoom: at a narrow field of view a few degrees is
+    /// most of the frame, at a wide one it is nothing.
     /// </summary>
     private static void ApplyFramingGuard(Camera camera)
     {
@@ -460,7 +488,7 @@ internal static class CinematicCamera
         if (toAircraft.sqrMagnitude < 0.0001f)
             return;
 
-        float limit = Mathf.Clamp01(CinematicPresets.FramingLimit) * camera.fieldOfView * 0.5f;
+        float limit = Mathf.Clamp01(CinematicTuning.FramingLimit) * camera.fieldOfView * 0.5f;
         float off = Vector3.Angle(_rotation * Vector3.forward, toAircraft);
         if (off <= limit || off < 0.001f)
             return;

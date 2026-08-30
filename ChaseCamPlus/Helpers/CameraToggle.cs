@@ -11,9 +11,6 @@ public static class CameraToggle
 {
     public static void Poll()
     {
-        if (!Plugin.Enabled.Value)
-            return;
-
         if (Plugin.ToggleActionId < 0)
             return;
 

@@ -16,12 +16,24 @@ public static class HierarchyDump
 {
     private const int MaxLines = 1200;
 
+    /// <summary>
+    /// Deliberately a constant and not a setting. This is a tool for working on the mod — which
+    /// object owns a given HUD widget is scene data, so there is no reading it out of the game's
+    /// code — and it has no business in a config file a player opens. Flip it and rebuild when a
+    /// HUD question needs an answer.
+    /// </summary>
+    // static readonly rather than const so flipping it does not make everything below it
+    // unreachable, which the build treats as a warning.
+    private static readonly bool DumpEnabled = false;
+
+    private static readonly KeyCode DumpKey = KeyCode.F10;
+
     public static void Poll()
     {
-        if (!Plugin.DebugDumpHudHierarchy.Value)
+        if (!DumpEnabled)
             return;
 
-        if (!Input.GetKeyDown(Plugin.DebugDumpKey.Value))
+        if (!Input.GetKeyDown(DumpKey))
             return;
 
         Dump();

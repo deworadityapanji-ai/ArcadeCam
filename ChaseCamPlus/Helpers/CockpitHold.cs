@@ -8,15 +8,14 @@ namespace ChaseCamPlus.Helpers;
 /// compromise, this lets the player borrow the cockpit for the length of a gun pass and hands the
 /// camera straight back.
 ///
-/// Nothing needs saving and restoring. The cinematic camera's on/off flag is independent of which
-/// camera state is running — <see cref="CinematicCamera.Reset"/> clears the smoothing but never the
-/// flag — so returning to chase returns to exactly the chase you had, cinematic or plain, without
-/// this having to remember which. Coming back it eases in over the usual transition instead of
-/// cutting, because the chase state is entered fresh.
+/// Nothing needs saving and restoring. Which chase camera runs is a config setting, not a piece of
+/// live state, so returning to chase returns to exactly the chase you left without this having to
+/// remember which it was. Coming back it eases in over the usual transition instead of cutting,
+/// because the chase state is entered fresh.
 ///
 /// The field of view needs no handling either: <c>CameraCockpitState</c> sets <c>defaultFoV</c> on
-/// entry and <c>defaultExternalFoV</c> on the way out, so neither the cinematic camera's own FoV nor
-/// the cockpit's can leak into the other.
+/// entry and <c>defaultExternalFoV</c> on the way out, so the cockpit's cannot leak into the
+/// external view.
 ///
 /// Flying is unaffected across the switch. The virtual joystick's deflection lives on a HUD
 /// transform rather than in the camera, and <see cref="PatchHelper.EffectiveCameraMode"/> already
@@ -30,9 +29,6 @@ public static class CockpitHold
 
     public static void Poll()
     {
-        if (!Plugin.Enabled.Value)
-            return;
-
         if (Plugin.CockpitHoldActionId < 0)
             return;
 

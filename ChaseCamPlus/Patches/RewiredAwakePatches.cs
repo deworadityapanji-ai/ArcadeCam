@@ -38,15 +38,15 @@ static class RewiredAwakePatches
         },
         new ActionDefinition
         {
-            Name = Plugin.ACTION_CINEMATIC,
-            Descriptive = "Cinematic Chase Cam",
-            Store = id => Plugin.CinematicActionId = id
-        },
-        new ActionDefinition
-        {
             Name = Plugin.ACTION_COCKPIT_HOLD,
             Descriptive = "Cockpit View (Hold)",
             Store = id => Plugin.CockpitHoldActionId = id
+        },
+        new ActionDefinition
+        {
+            Name = Plugin.ACTION_CAMERA_ROLL,
+            Descriptive = "Chase Camera Roll Toggle",
+            Store = id => Plugin.CameraRollActionId = id
         }
     };
 
