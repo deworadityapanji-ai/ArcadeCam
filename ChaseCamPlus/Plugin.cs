@@ -7,14 +7,7 @@ using UnityEngine;
 
 namespace ChaseCamPlus;
 
-public static class PluginInfo
-{
-    public const string PLUGIN_GUID = "ChaseCamPlus";
-    public const string PLUGIN_NAME = "ChaseCamPlus";
-    public const string PLUGIN_VERSION = "1.0.0";
-}
-
-[BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
+[BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class Plugin : BaseUnityPlugin
 {
     internal static new ManualLogSource Logger;
@@ -151,9 +144,9 @@ public class Plugin : BaseUnityPlugin
             "Play the hit confirmation sound outside the cockpit, which vanilla gates on the cockpit "
             + "view. Works around an oversight; follows the game's own show-hit-markers setting.");
 
-        Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+        Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
 
-        var harmony = new Harmony(PluginInfo.PLUGIN_GUID);
+        var harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
         harmony.PatchAll();
     }
 
