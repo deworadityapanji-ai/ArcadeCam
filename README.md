@@ -68,6 +68,8 @@ See [configuration details](docs/CONFIGURATION.md), [building from source](docs/
 
 ArcadeCam is a fork of **[ChaseCamPlus by CarloApri](https://github.com/CarloApri/NO-ChaseCamPlus)**, shared with the original developer's **explicit permission**. Thank you to CarloApri for the original mod and the foundation that made this project possible. The original MIT license and third-party credits are retained.
 
+This project is an unofficial community modification and is not affiliated with, sponsored by, or endorsed by Shockfront Studios Pty Ltd. Original Nuclear Option assets, vehicle designs, audio, and code are Copyright (c) 2026 Shockfront Studios Pty Ltd. All rights reserved. Nuclear Option and Shockfront Studios are trademarks or registered trademarks of Shockfront Studios Pty Ltd. Original mod content and all other trademarks belong to their respective owners.
+
 ## AI disclosure
 
 The code for ArcadeCam's additions and changes was written using AI, specifically **GPT 6.1 Sol**. I provided the design direction, feature requests and in-game testing.
