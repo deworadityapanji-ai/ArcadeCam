@@ -37,7 +37,7 @@ ArcadeCam was developed and playtested with a **gamepad**. **HOTAS and full mous
 ## Installation
 
 1. Install BepInEx 5 for Nuclear Option. BepInEx Configuration Manager provides the settings interface.
-2. Download the latest **ArcadeCam-v0.1.12.zip** from [Releases](https://github.com/deworadityapanji-ai/NO-ChaseCamPlus/releases/latest).
+2. Download the latest **ArcadeCam-v0.1.12.zip** from [Releases](https://github.com/deworadityapanji-ai/ArcadeCam/releases/latest).
 3. With the game closed, extract the ZIP into the Nuclear Option game folder. The DLL should end up at `BepInEx/plugins/ArcadeCam/ArcadeCam.dll`.
 4. Start the game, bind the ArcadeCam actions under **Settings > Controls > Flight Controls**, then choose a preset in **Configuration Manager > ArcadeCam > ArcadeCam > Preset**.
 
