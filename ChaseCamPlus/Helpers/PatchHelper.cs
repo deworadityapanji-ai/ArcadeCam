@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 public static class PatchHelper
 {
@@ -23,7 +23,7 @@ public static class PatchHelper
 
         // The mouse is orbiting the camera right now, so leave the stick where it is.
         // This mirrors the vanilla "Free Look" freeze one branch further up the same method.
-        if (FreeLookHeld())
+        if (ChaseFreeLook.IsActive() || ChaseTargetLook.IsActive())
             return actual;
 
         return CameraMode.cockpit;
@@ -114,18 +114,5 @@ public static class PatchHelper
         return GameManager.GetLocalAircraft(out Aircraft aircraft) && aircraft != null
             ? aircraft.transform.forward
             : cameraTransform.forward;
-    }
-
-    /// <summary>True while the user holds the mod's own free look binding.</summary>
-    public static bool FreeLookHeld()
-    {
-        if (Plugin.FreeLookActionId < 0)
-            return false;
-
-        var player = GameManager.playerInput;
-        if (player == null)
-            return false;
-
-        return player.GetButton(Plugin.FreeLookActionId);
     }
 }

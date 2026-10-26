@@ -1,10 +1,10 @@
 using System;
 using System.Reflection;
-using ChaseCamPlus.Helpers;
+using ArcadeCam.Helpers;
 using HarmonyLib;
 using UnityEngine;
 
-namespace ChaseCamPlus.Patches;
+namespace ArcadeCam.Patches;
 
 public class CameraChaseStatePatches
 {
@@ -14,6 +14,32 @@ public class CameraChaseStatePatches
     private static float _desiredTilt;
     private static float _pan;
     private static float _tilt;
+    private static bool _wasFreeLookActive;
+    private static bool _wasLookingAtTarget;
+    private static bool _recenterRequested;
+    private static bool _rebaseLook;
+    private static bool _hasLookDirections;
+    private static CameraStateManager _lookCamera;
+    private static Unit _lookUnit;
+    private static Vector3 _lastLookDirection, _lastDesiredDirection;
+
+    internal static void PreserveLookForHorizonChange()
+    {
+        if (!_hasLookDirections) return;
+        CameraStateManager cam = SceneSingleton<CameraStateManager>.i;
+        if (cam != null && cam == _lookCamera
+            && cam.currentState == cam.chaseState && cam.followingUnit == _lookUnit)
+            _rebaseLook = true;
+    }
+    private static readonly CenteringInputState CenteringInput = new CenteringInputState();
+
+    internal static void RecenterView()
+    {
+        ChaseViewReturn.Begin(SceneSingleton<CameraStateManager>.i);
+        ChaseTargetLook.RestoreBasePose(SceneSingleton<CameraStateManager>.i);
+        ChaseTargetLook.CancelUntilReleased();
+        _recenterRequested = true;
+    }
 
     private static void ResetOrbit()
     {
@@ -21,15 +47,31 @@ public class CameraChaseStatePatches
         _desiredTilt = 0f;
         _pan = 0f;
         _tilt = 0f;
+        _wasFreeLookActive = false;
+        _wasLookingAtTarget = false;
+        _recenterRequested = false;
+        _rebaseLook = false;
+        _hasLookDirections = false;
+        _lookCamera = null; _lookUnit = null;
+        CenteringInput.Reset();
+        ChaseViewReturn.Reset();
+        ChaseCameraGeometry.Reset();
+        ChaseCameraMotion.Reset();
+        ChaseFreeLook.Reset();
+        TargetingScreenOverlay.Hide();
+        ChaseTargetLook.Reset();
     }
 
     /// <summary>Start every chase session from the default angle.</summary>
     [HarmonyPatch(typeof(CameraChaseState), nameof(CameraChaseState.EnterState))]
     static class EnterState
     {
-        static void Postfix()
+        static void Postfix(CameraStateManager cam)
         {
+            if (cam == null || cam.currentState != cam.chaseState) return;
             ResetOrbit();
+            ChaseFreeLook.EnterChase();
+            CinematicCamera.SetEnabled(Plugin.LevelHorizonByDefault.Value);
             CinematicCamera.Reset();
         }
     }
@@ -54,6 +96,7 @@ public class CameraChaseStatePatches
     {
         static Exception Finalizer(Exception __exception, CameraStateManager cam)
         {
+            ResetOrbit();
             UpdateState.ShowMapWidgets(show: true);
             UpdateState.ApplyElementOverrides(inChase: false);
 
@@ -121,86 +164,152 @@ public class CameraChaseStatePatches
         /// reaching any of the placement code. The postfix below still runs, and guards the same
         /// field itself.
         /// </summary>
-        static bool Prefix(CameraStateManager cam) => cam != null && cam.followingUnit != null;
-
-        static void Postfix(CameraStateManager cam, float ___viewDistAdjust)
+        static bool Prefix(CameraStateManager cam)
         {
-            // Before the free look, and regardless of whether it is switched on at all.
-            EnforceHudVisibility();
+            WeaponCamera.BeforeCameraUpdate(cam);
+            ChaseTargetLook.RestoreBasePose(cam);
+            ChaseCameraGeometry.Restore(cam);
+            return cam != null && cam.followingUnit != null;
+        }
 
-            if (cam == null || cam.cameraPivot == null || cam.followingUnit == null)
+        static void Postfix(CameraStateManager cam, float ___viewDistAdjust,
+            Vector3 ___posVector, Vector3 ___targetVector, Quaternion ___cameraCustomRotation)
+        {
+            if (cam == null || cam.currentState != cam.chaseState)
                 return;
 
-            // Before the free look too, so that orbiting composes on top of whichever placement is
-            // live. The free look works off the finished camera rather than off the chase state's
-            // maths, so it does not care which one that was.
+            EnforceHudVisibility();
+            if (cam.cameraPivot == null || cam.followingUnit == null)
+                return;
+
+            ChaseCameraGeometry.Capture(cam);
+            float dt = Time.unscaledDeltaTime;
+            bool inputAllowed = ChaseInput.IsAllowed(cam);
+            bool active = ChaseFreeLook.IsActive();
+            float panInput = inputAllowed ? GameManager.playerInput.GetAxis("Pan View") : 0f;
+            float tiltInput = inputAllowed ? GameManager.playerInput.GetAxis("Tilt View") : 0f;
+            var controller = GameManager.playerInput?.controllers.GetLastActiveController();
+            bool usingStick = controller != null && controller.type == Rewired.ControllerType.Joystick;
+            float deadzone = usingStick ? Plugin.CenteringDeadzone.Value : 0.0001f;
+            if (Mathf.Abs(panInput) < deadzone) panInput = 0f;
+            if (Mathf.Abs(tiltInput) < deadzone) tiltInput = 0f;
+            bool movingLook = panInput != 0f || tiltInput != 0f;
+            bool lookingAtTarget = ChaseTargetLook.TryGetTargetPosition(cam, out Vector3 targetPosition);
+            CenteringAction centering = CenteringInput.Read(Plugin.CenteringMode.Value, active,
+                lookingAtTarget || ChaseTargetLook.IsTransitioning || ChaseViewReturn.IsActive
+                    || _rebaseLook || CinematicCamera.IsTransitioning, movingLook,
+                Plugin.CenteringEnabled.Value ? Plugin.CenteringForce.Value : 0f, Plugin.CenteringDelay.Value, dt);
+            bool targetEnded = _wasLookingAtTarget && !lookingAtTarget;
+            bool recentered = _recenterRequested || (targetEnded && Plugin.CenterAfterTargetLook.Value)
+                              || centering == CenteringAction.Snap;
+            if (recentered)
+            {
+                _desiredPan = _pan = 0f;
+                _desiredTilt = _tilt = 0f;
+                _wasFreeLookActive = false;
+                Transform aircraft = cam.followingUnit.transform;
+                Vector3 presetPosition = ___posVector;
+                Vector3 presetDirection = ___targetVector;
+                Vector3 presetOffset = aircraft.right * presetPosition.x
+                                       + aircraft.up * presetPosition.y
+                                       + aircraft.forward * presetPosition.z;
+                cam.transform.position = cam.cameraPivot.position + presetOffset * (1f + ___viewDistAdjust);
+                Vector3 presetForward = aircraft.right * presetDirection.x
+                                        + aircraft.up * presetDirection.y
+                                        + aircraft.forward * presetDirection.z;
+                if (presetForward.sqrMagnitude > 0.0001f)
+                    cam.transform.rotation = Quaternion.LookRotation(presetForward, aircraft.up) * ___cameraCustomRotation;
+                KeepOutOfTerrain(cam, cam.cameraPivot.position);
+                ChaseCameraGeometry.Capture(cam);
+                CinematicCamera.Recenter();
+                // An explicit Center press suppresses a held target button until release.
+                if (!_recenterRequested && !targetEnded)
+                    ChaseTargetLook.Reset();
+                _recenterRequested = false;
+                _rebaseLook = false;
+                _hasLookDirections = false;
+                _lookCamera = null; _lookUnit = null;
+            }
+            _wasLookingAtTarget = lookingAtTarget;
+
             if (CinematicCamera.Apply(cam, ___viewDistAdjust))
                 KeepOutOfTerrain(cam, cam.cameraPivot.position);
 
-            float dt = Time.unscaledDeltaTime;
-
-            bool held = PatchHelper.FreeLookHeld()
-                        && GameManager.flightControlsEnabled
-                        && !DynamicMap.mapMaximized
-                        && !RadialMenuMain.IsInUse();
-
-            if (held)
+            ChaseCameraGeometry.Apply(cam);
+            ChaseCameraMotion.Apply(cam, movingLook || Mathf.Abs(_pan) > 1f || Mathf.Abs(_tilt) > 1f,
+                lookingAtTarget || ChaseTargetLook.IsTransitioning || ChaseViewReturn.IsActive);
+            Vector3 referenceUp = CinematicCamera.OrbitReferenceUp(cam);
+            Vector3 orbitUp = FreeLookAngles.YawAxis(cam.transform.forward, cam.transform.up, referenceUp);
+            Vector3 baseForward = cam.transform.forward;
+            float baseElevation = FreeLookAngles.Elevation(baseForward, orbitUp);
+            if (_rebaseLook && _hasLookDirections)
             {
-                // Same shape as the cockpit free look, so both views feel alike, and it follows
-                // the game's own invert-pitch preference rather than offering a second one.
+                Vector2 current = FreeLookAngles.Rebase(_lastLookDirection, cam.transform.forward, orbitUp);
+                Vector2 desired = FreeLookAngles.Rebase(_lastDesiredDirection, cam.transform.forward, orbitUp);
+                _pan = current.x; _tilt = current.y;
+                _desiredPan = desired.x; _desiredTilt = desired.y;
+                _rebaseLook = CinematicCamera.IsTransitioning;
+            }
+            if (lookingAtTarget)
+            {
+                _desiredPan = _pan;
+                _desiredTilt = _tilt;
+            }
+            else if (active && !recentered)
+            {
                 float invert = PlayerSettings.viewInvertPitch ? -1f : 1f;
                 float sensitivity = PlayerSettings.viewSensitivity * Plugin.FreeLookSensitivity.Value;
-
-                _desiredPan += GameManager.playerInput.GetAxis("Pan View") * 120f * sensitivity * dt;
-                _desiredTilt += GameManager.playerInput.GetAxis("Tilt View") * 120f * sensitivity * dt * invert;
-
-                const float maxPitch = 85f;
-                _desiredPan = Mathf.Clamp(_desiredPan, -180f, 180f);
-                _desiredTilt = Mathf.Clamp(_desiredTilt, -maxPitch, maxPitch);
+                _desiredPan += panInput * 120f * sensitivity * dt;
+                _desiredTilt += tiltInput * 120f * sensitivity * dt * invert;
+                _desiredPan = FreeLookAngles.Wrap(_desiredPan);
+                _desiredTilt = FreeLookAngles.ClampTilt(_desiredTilt, baseElevation);
+                if (centering == CenteringAction.Pull)
+                {
+                    _desiredPan = CameraCentering.Decay(_desiredPan, Plugin.CenteringForce.Value, dt);
+                    _desiredTilt = CameraCentering.Decay(_desiredTilt, Plugin.CenteringForce.Value, dt);
+                }
             }
-            else
+            else if (inputAllowed && !active && !Plugin.KeepFreeLookAngle.Value)
             {
                 _desiredPan = 0f;
                 _desiredTilt = 0f;
             }
+            else if (inputAllowed && !active && _wasFreeLookActive)
+            {
+                _desiredPan = _pan;
+                _desiredTilt = _tilt;
+            }
+            if (inputAllowed) _wasFreeLookActive = active;
 
             float t = Mathf.Min(5f * dt / Mathf.Max(PlayerSettings.viewSmoothing, 0.01f), 1f);
-            _pan = Mathf.Lerp(_pan, _desiredPan, t);
-            _tilt = Mathf.Lerp(_tilt, _desiredTilt, t);
-
-            if (Mathf.Abs(_pan) < 0.01f && Mathf.Abs(_tilt) < 0.01f)
-                return;
+            _pan = FreeLookAngles.Step(_pan, _desiredPan, t);
+            _desiredTilt = FreeLookAngles.ClampTilt(_desiredTilt, baseElevation);
+            _tilt = FreeLookAngles.StepTilt(_tilt, _desiredTilt, t, baseElevation);
 
             Vector3 pivot = cam.cameraPivot.position;
             Vector3 offset = cam.transform.position - pivot;
-            if (offset.sqrMagnitude < 0.0001f)
-                return;
+            if ((Mathf.Abs(_pan) >= 0.01f || Mathf.Abs(_tilt) >= 0.01f)
+                && offset.sqrMagnitude >= 0.0001f)
+            {
+                // Build an upright orbit frame before pitching. The limit includes the
+                // native camera elevation, so a raised/tilted rig cannot cross a pole.
+                Quaternion basis = Quaternion.LookRotation(cam.transform.forward, orbitUp);
+                Quaternion orbit = Quaternion.AngleAxis(_pan, orbitUp)
+                                   * Quaternion.AngleAxis(_tilt, basis * Vector3.right);
+                cam.transform.position = pivot + orbit * offset;
+                cam.transform.rotation = orbit * basis;
+                KeepOutOfTerrain(cam, pivot);
+            }
 
-            // The aircraft's up is the right pan axis for the vanilla placement, whose whole frame is
-            // welded to the airframe: orbiting around anything else would slide relative to the view
-            // it started from. The cinematic camera is built the other way round — its horizon is
-            // level by construction — so panning around a rolling axis would tilt the world back,
-            // which is the one thing that placement exists to avoid.
-            Vector3 up = CinematicCamera.Active ? Vector3.up : cam.followingUnit.transform.up;
-
-            // The camera's own right, not a cross product of up and the offset. That cross points
-            // to the aircraft's left whenever the camera sits behind it — which is every default
-            // chase position — so the tilt came out mirrored; and it flipped sign again for the
-            // Front preset, where the offset points the other way. Taking the axis from the camera
-            // the game has already aimed at the aircraft keeps "mouse up raises the view" true from
-            // every preset, and never degenerates the way the cross product did looking straight
-            // down from Top or up from Belly.
-            Vector3 right = cam.transform.right;
-
-            // Tilt first in the vertical plane through the camera, then pan around the aircraft.
-            Quaternion orbit = Quaternion.AngleAxis(_pan, up) * Quaternion.AngleAxis(_tilt, right);
-
-            cam.transform.position = pivot + orbit * offset;
-            cam.transform.rotation = orbit * cam.transform.rotation;
-
-            KeepOutOfTerrain(cam, pivot);
+            // Remember manual directions before target tracking/centering overlays.
+            _lastLookDirection = cam.transform.forward;
+            _lastDesiredDirection = FreeLookAngles.Direction(_desiredPan, _desiredTilt,
+                // The orbit was applied to this frame's native base forward.
+                baseForward, orbitUp);
+            _lookCamera = cam; _lookUnit = cam.followingUnit; _hasLookDirections = true;
+            ChaseTargetLook.Apply(cam, lookingAtTarget, targetPosition);
+            ChaseViewReturn.Apply(cam);
         }
-
         /// <summary>
         /// Keeps the HUD in the state the config asks for, checked every frame instead of once on
         /// entry.
@@ -339,7 +448,7 @@ public class CameraChaseStatePatches
 
             // The weapon HUD states switch the waterline back on whenever the selected weapon
             // changes, so this is re-applied every frame rather than set once.
-            bool showWaterline = !inChase || Plugin.Waterline.Value;
+            bool showWaterline = !inChase || Plugin.Waterline.Value != HudAttachment.Hidden;
             if (Field(ref _waterlineField, "waterline")?.GetValue(hud) is Behaviour waterline
                 && waterline.enabled != showWaterline)
             {
@@ -411,20 +520,7 @@ public class CameraChaseStatePatches
         /// Orbiting can swing the camera through the ground. This repeats the collision pull-in the
         /// chase state does for its own placement, using the same cast and the same layer mask.
         /// </summary>
-        private static void KeepOutOfTerrain(CameraStateManager cam, Vector3 pivot)
-        {
-            Vector3 toPivot = pivot - cam.transform.position;
-            if (toPivot.sqrMagnitude < 0.0001f)
-                return;
-
-            if (!Physics.Linecast(pivot, pivot - toPivot * 2f, out RaycastHit hit, PhysicsLayers.StaticsMask))
-                return;
-
-            float facing = Mathf.Max(Vector3.Dot(toPivot.normalized, hit.normal), 0.1f);
-            Vector3 pulled = hit.point + toPivot.normalized / facing;
-
-            if ((pulled - pivot).sqrMagnitude < toPivot.sqrMagnitude)
-                cam.transform.position = pulled;
-        }
+        private static void KeepOutOfTerrain(CameraStateManager cam, Vector3 pivot) =>
+            CameraTerrainAvoidance.Apply(cam, pivot);
     }
 }

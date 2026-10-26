@@ -1,4 +1,4 @@
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 /// <summary>
 /// Every number the cinematic chase camera is made of, in one place.

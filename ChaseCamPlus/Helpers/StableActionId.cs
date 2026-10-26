@@ -1,4 +1,4 @@
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 /// <summary>
 /// Rewired persists the player's bindings keyed by numeric action id, so an id that shifts between

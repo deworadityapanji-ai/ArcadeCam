@@ -1,158 +1,73 @@
-# ChaseCamPlus
+# ArcadeCam
 
-Makes Nuclear Option's chase camera usable on mouse and keyboard: the virtual joystick works in third
-person, the camera gains a free look it never had, the flight HUD stops disappearing, and there is a
-second chase camera that keeps the horizon level.
+**A camera and HUD mod for Nuclear Option, built around controller play and inspired by arcade flight games.**
+
+ArcadeCam started as a personal project because I couldn't find a mod that quite matched the camera feel I wanted. It gradually grew into something I wanted to share with other players coming from arcade flight games and getting used to Nuclear Option's more advanced simcade flying.
+
+The aim is a more familiar, customizable view of the action while keeping the game's flight model and systems intact.
 
 ## Features
 
-- **Virtual joystick in chase view.** Vanilla only feeds the mouse into the stick while the camera is
-  in the cockpit, and the stick is not disabled in chase so much as frozen while still commanding —
-  switch to chase mid-turn and the aircraft holds that deflection. This keeps it working. Sensitivity,
-  centering and invert-pitch come from the game's own Virtual Joystick settings.
-- **Free look.** Chase is the only camera in the game that never reads the view axes. Hold the binding
-  and the mouse orbits around the aircraft; release and it eases back. The virtual joystick freezes
-  while the key is held, so the mouse is never doing two jobs at once.
-- **Cockpit ↔ chase toggle.** One key. From any other camera — orbit, TV, free, relative — it returns
-  to the cockpit rather than doing nothing.
-- **Hold to look through the cockpit.** Hold a key to borrow the cockpit for the length of a gun pass;
-  release and you are back in the chase view you left. Turret aiming works properly while you hold it.
-- **Flight HUD and minimap in chase.** Vanilla hides the HUD in third person, and several later paths
-  switch it off again; this restores it and keeps it that way. Six switches decide how much of it you
-  get.
-- **Turret aiming in chase.** Vanilla gates manual turret aiming on the cockpit, so in chase the
-  turret holds its last heading and cannot be moved. With this on it tracks the camera; with it off it
-  is pinned to the nose, like a fixed forward gun.
-- **Hit confirmation sound outside the cockpit.** Only the sound is added; the on-screen marker stays
-  cockpit-only.
-- **A chase camera that does not roll.** See below.
+- **Free look and target tracking:** toggle or hold to look around, follow your selected target, and smoothly recenter the camera.
+- **Two horizon styles:** switch between a camera that follows the aircraft's roll and one that keeps the horizon level.
+- **Adjustable framing and motion:** change camera distance, height and zoom, with optional movement responding to speed, acceleration, airbraking and pitch maneuvers.
+- **Customizable HUD:** attach instruments, compass and waterline to the aircraft or camera, or hide them individually.
+- **Targeting screen in chase view:** display your aircraft's existing cockpit targeting-camera feed in a movable panel.
+- **Missile and bomb camera:** follow your latest launched weapon while retaining aircraft control, with explosion shake, a brief view of the damaged target or surviving wreckage when available, and a smooth return. The HUD can stay hidden throughout the sequence.
+- **Configurable controls and settings:** bind actions through the game's Flight Controls menu and adjust settings through BepInEx Configuration Manager.
 
-## Install
+## Presets
 
-Requires [BepInEx 5](https://github.com/BepInEx/BepInEx/releases) (tested on 5.4.23.5).
-
-Drop `ChaseCamPlus.dll` into `BepInEx\plugins\ChaseCamPlus\`, then launch once to generate the config
-and register the keybinds.
-
-## Keybinds
-
-Assign under **Settings → Controls → Flight Controls**. None is bound by default, and an unbound
-action simply never fires.
-
-| Action | Purpose |
+| Preset | What it does |
 | --- | --- |
-| `Chase Cam Free Look` | Hold to orbit the camera around the aircraft |
-| `Chase Cam Toggle` | Switch between cockpit and chase |
-| `Cockpit View (Hold)` | Hold to drop into the cockpit, release to return to chase |
-| `Chase Camera Roll Toggle` | Swap between the game's chase camera and the level-horizon one |
+| **NuclearOptionPlus** | Aircraft-relative horizon and instruments, with free look and no automatic centering or added speed/pitch motion. |
+| **AceCombat** | Closer framing, camera-fixed instruments, speed-related camera motion and strong centering after you release the look input. |
+| **AceCombat8** | The AceCombat setup with added pitch anticipation for more dynamic maneuver framing. |
+| **WarThunder** | Level horizon, camera-fixed instruments and free look without automatic centering or added speed/pitch motion. |
+| **Custom** | Save and return to your own edited setup. |
 
-## The level-horizon camera
+These are inspired starting points, not exact recreations of those games. You can adjust them freely, and your edits persist across restarts.
 
-The game's chase rig is welded to the airframe: its offset is built in the aircraft's own axes and its
-up vector *is* the aircraft's up, so the world rolls when you roll and the aircraft can never turn
-within the frame.
+## Requirements and testing
 
-*Chase Camera Roll Toggle* swaps in one built the other way round. The horizon stays level at any bank
-angle while the camera's position is carried round by the roll, so an aileron roll walks the aircraft
-round a circle in the frame instead of spinning it on the spot. The boom hangs off the flight path
-rather than the nose and lags behind it, and the camera flies a course of its own, so the aircraft
-rotates and drifts in front of it. Pull hard and you watch yourself go nose-high and swing across the
-frame before the camera comes round. The boom lengthens with speed and stretches under g.
+Requires **BepInEx 5**. Use **BepInEx Configuration Manager** for the settings interface.
 
-It is a viewing mode more than a flying one: it stops pointing where the aircraft does, so anything
-read off the frame is unreliable. It suits a jet better than a rotorcraft, whose flight path and nose
-part company at the slightest crab. Free look, the virtual joystick and the cockpit toggle all keep
-working.
+ArcadeCam was developed and playtested with a **gamepad**. **HOTAS and full mouse-and-keyboard setups have not been tested.** Feedback from those setups is welcome.
 
-It has no settings of its own. The numbers behind it only work as a set, and they live in
-`Helpers/CinematicTuning.cs` if you build from source. Its field of view comes from the game's own
-**External Field of View** setting, which also decides how large the aircraft looks.
+## Installation
 
-## Config
+1. Install BepInEx 5 for Nuclear Option. BepInEx Configuration Manager provides the settings interface.
+2. Download the latest **ArcadeCam-v0.1.12.zip** from [Releases](https://github.com/deworadityapanji-ai/NO-ChaseCamPlus/releases/latest).
+3. With the game closed, extract the ZIP into the Nuclear Option game folder. The DLL should end up at `BepInEx/plugins/ArcadeCam/ArcadeCam.dll`.
+4. Start the game, bind the ArcadeCam actions under **Settings > Controls > Flight Controls**, then choose a preset in **Configuration Manager > ArcadeCam > ArcadeCam > Preset**.
 
-`BepInEx\config\ChaseCamPlus.cfg`. Thirteen settings in three sections, written as what you *see*, so
-`true` always means "this is on screen". Changes apply on the next launch.
+For a manual install, place the release's `ArcadeCam.dll` in that same plugin folder. Update by replacing the existing DLL with the game closed. Your saved settings are retained. Keep only one copy of ArcadeCam.dll in the plugins directory tree.
 
-### `Chase HUD`
+ChaseCamPlus does not need to be installed separately. If both are installed, ArcadeCam takes control of chase view while enabled. Turning **EnableArcadeCam** off and restarting lets the original mod run again.
 
-Applies to whichever chase camera is running.
+## Controls
 
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `FlightHud` | `true` | Keep the flight HUD on in chase. |
-| `Map` | `true` | Keep the minimap alive. Needs `FlightHud`. |
-| `TurretAim` | `true` | A manually aimed turret follows the camera. Off pins it to the nose. |
-| `PitchLadder` | `false` | Show the pitch ladder. Its rungs and its horizon line are one texture, so they come and go together. |
-| `Waterline` | `false` | Show the waterline, the fixed aircraft datum at the centre of the HUD. |
-| `LeftInstruments` | `false` | Show the left cluster: airspeed, angle of attack and its indexer, Mach, g load, fuel. |
-| `RightInstruments` | `false` | Show the right cluster: throttle or collective, rotor RPM, altitude, radar altitude, climb rate. |
-| `Compass` | `false` | Show the heading ribbon across the top and the degree readout under it. |
-| `VirtualJoystickIndicator` | `false` | Show the stretching line and the dot on its end. Drawing only — the stick keeps working. |
+No new bindings are assigned automatically. Flight axes stay independent of camera look controls.
 
-All six default to off, so out of the box third person is a clean frame: what is left is the part of
-the HUD that is about the world rather than about the aircraft — reticles, the velocity vector, the
-free-look diamond, unit markers, warnings — plus the minimap. Switch back on whatever you want to
-read.
+| Action | Function |
+| --- | --- |
+| ArcadeCam Free Look | Toggle free look, or use the optional hold mode. |
+| ArcadeCam View Toggle | Switch between cockpit and chase view. |
+| ArcadeCam Cockpit (Hold) | Use cockpit view temporarily while held. |
+| ArcadeCam Horizon Toggle | Switch between aircraft-relative and level-horizon chase. |
+| ArcadeCam Centering Toggle | Turn automatic centering on or off. |
+| ArcadeCam Weapon Camera | Hold to follow the latest live missile/bomb; optional toggle mode. Hold before launching to watch its release. |
+| Native Pan View / Tilt View / Zoom View | Use your existing view axes and zoom bindings. |
+| Native Center View / Look at Target | Recenter in chase or follow the selected target. |
 
-Two are worth leaving off even if you turn the rest on. The pitch ladder and the waterline are drawn
-against the camera's axes, so in third person they say something untrue; and the heading ribbon is
-plainly wrong on the level-horizon camera, which is free to point away from where the aircraft is
-going.
+Keep holding Weapon Camera through impact to watch the explosion and, when available, the damaged target or wreckage. Release to return; in toggle mode, press again. **WeaponCameraHideHud** hides the native HUD during the full sequence. **WeaponCameraImpactShake** adjusts the explosion kick, including an off setting.
 
-**Warnings are never hidden.** The stall and rotor-RPM warnings, the radar warning receiver, the gear
-indicator and the helicopter's hover indicator share those panels and stay put whatever these are set
-to.
-
-### `Other`
-
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `FreeLookSensitivity` | `1.0` | Multiplier on top of the game's own View Sensitivity, for the chase free look. |
-| `FixWeaponFoV` | `true` | Stop unguided bombs and boresight zoom forcing the cockpit field of view on external views. |
-| `HitSoundOutsideCockpit` | `true` | Play the hit confirmation sound outside the cockpit. Follows the game's own *show hit markers* setting. |
-
-The last two work around vanilla bugs and should come out once the game fixes them.
-
-There is no switch for the free look itself: it does nothing until you bind a key, so leaving *Chase
-Cam Free Look* unbound is already the off position.
-
-### `Virtual Joystick`
-
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `VirtualJoystick` | `true` | Mouse drives the virtual joystick in chase view, as it already does in the cockpit. |
-
-## Known vanilla issues
-
-**Blacking out in third person.** Pull hard enough for long enough and the pilot passes out, and the
-screen goes fully black for three to six seconds. In the cockpit you see it coming — the edges darken,
-colour drains, the audio muffles — because the game builds those warning effects only in the cockpit
-view, while the blackout itself is applied whatever the camera is doing. Not a mod problem, but this
-mod is what puts you out there, so it is worth recognising.
-
-**Weapon field of view.** Selecting an unguided bomb in an external view snaps the field of view to
-the cockpit default and never puts it back; boresight zoom does the same when *zoom on boresight* is
-on. `FixWeaponFoV` applies the cockpit/external choice the game makes everywhere else. Without it,
-switching to the cockpit and back restores it.
-
-**Dying in chase.** Vanilla throws an exception every frame after the pilot dies in third person,
-until something else moves the camera. This mod guards it.
-
-## Compatibility
-
-Rewired stores bindings by numeric action id, and the allocation scheme most Nuclear Option mods
-inherit depends on plugin load order — installing or removing an unrelated mod can shift the number
-and hand your binding to someone else's action. This mod derives its ids from a hash of the action
-name, so they are the same every launch whatever else is installed.
-
-If you run another mod that shows the HUD in third person, remove it: two patches writing the same HUD
-state will fight, and which wins depends on load order.
-
-Client-side. No new values reach the network — the same clamped control inputs travel the same path
-the game already uses from the cockpit.
+See [configuration details](docs/CONFIGURATION.md), [building from source](docs/BUILDING.md), and [testing notes](docs/TESTING.md).
 
 ## Credits
 
-The Rewired action-injection technique comes from
-[TargetCamControl](https://github.com/9138noms/TargetCamControl); its BepInEx adaptation was taken
-from [YawOnMouse](https://github.com/muji2498/YawOnMouse) (MIT).
+ArcadeCam is a fork of **[ChaseCamPlus by CarloApri](https://github.com/CarloApri/NO-ChaseCamPlus)**, shared with the original developer's **explicit permission**. Thank you to CarloApri for the original mod and the foundation that made this project possible. The original MIT license and third-party credits are retained.
+
+## AI disclosure
+
+The code for ArcadeCam's additions and changes was written using AI, specifically **GPT 6.1 Sol**. I provided the design direction, feature requests and in-game testing.

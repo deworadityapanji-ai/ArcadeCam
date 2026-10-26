@@ -3,7 +3,7 @@ using System.Text;
 using HarmonyLib;
 using UnityEngine;
 
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 /// <summary>
 /// Debug aid, off by default. Writes the UI hierarchy around the flight HUD to the BepInEx log.
@@ -42,7 +42,7 @@ public static class HierarchyDump
     private static void Dump()
     {
         var sb = new StringBuilder();
-        sb.AppendLine("===== ChaseCamPlus HUD hierarchy dump =====");
+        sb.AppendLine("===== ArcadeCam HUD hierarchy dump =====");
         sb.AppendLine($"camera mode: {CameraStateManager.cameraMode}, mapMaximized: {DynamicMap.mapMaximized}");
 
         FlightHud hud = SceneSingleton<FlightHud>.i;

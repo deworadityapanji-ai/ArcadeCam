@@ -1,4 +1,4 @@
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 /// <summary>
 /// One key that swaps between the cockpit and the chase camera.

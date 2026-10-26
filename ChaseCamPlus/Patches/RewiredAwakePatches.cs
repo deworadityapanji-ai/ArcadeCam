@@ -1,11 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using ChaseCamPlus.Helpers;
+using ArcadeCam.Helpers;
 using HarmonyLib;
 using Rewired;
 
-namespace ChaseCamPlus.Patches;
+namespace ArcadeCam.Patches;
 
 // Same approach as YawOnMouse / TargetCamControl: inject user-assignable InputActions into Rewired's
 // user data before the input manager reads it, so the bindings show up in the game's own Flight
@@ -27,27 +27,29 @@ static class RewiredAwakePatches
         new ActionDefinition
         {
             Name = Plugin.ACTION_FREELOOK,
-            Descriptive = "Chase Cam Free Look",
+            Descriptive = "ArcadeCam Free Look",
             Store = id => Plugin.FreeLookActionId = id
         },
         new ActionDefinition
         {
             Name = Plugin.ACTION_TOGGLE,
-            Descriptive = "Chase Cam Toggle",
+            Descriptive = "ArcadeCam View Toggle",
             Store = id => Plugin.ToggleActionId = id
         },
         new ActionDefinition
         {
             Name = Plugin.ACTION_COCKPIT_HOLD,
-            Descriptive = "Cockpit View (Hold)",
+            Descriptive = "ArcadeCam Cockpit (Hold)",
             Store = id => Plugin.CockpitHoldActionId = id
         },
         new ActionDefinition
         {
             Name = Plugin.ACTION_CAMERA_ROLL,
-            Descriptive = "Chase Camera Roll Toggle",
+            Descriptive = "ArcadeCam Horizon Toggle",
             Store = id => Plugin.CameraRollActionId = id
-        }
+        },
+        new ActionDefinition { Name = Plugin.ACTION_CENTERING_TOGGLE, Descriptive = "ArcadeCam Centering Toggle", Store = id => Plugin.CenteringToggleActionId = id },
+        new ActionDefinition { Name = Plugin.ACTION_WEAPON_CAMERA, Descriptive = "ArcadeCam Weapon Camera", Store = id => Plugin.WeaponCameraActionId = id }
     };
 
     [HarmonyPrefix]

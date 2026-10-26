@@ -1,4 +1,4 @@
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 /// <summary>
 /// Hold a key to drop into the cockpit, release it to go back to the chase camera you came from.

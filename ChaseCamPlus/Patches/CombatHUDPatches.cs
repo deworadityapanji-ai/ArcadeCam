@@ -1,7 +1,7 @@
 using HarmonyLib;
 using UnityEngine;
 
-namespace ChaseCamPlus.Patches;
+namespace ArcadeCam.Patches;
 
 public class CombatHUDPatches
 {

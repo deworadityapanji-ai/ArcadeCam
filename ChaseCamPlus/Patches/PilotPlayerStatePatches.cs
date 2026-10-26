@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
-using ChaseCamPlus.Helpers;
+using ArcadeCam.Helpers;
 using HarmonyLib;
 
-namespace ChaseCamPlus.Patches;
+namespace ArcadeCam.Patches;
 
 public class PilotPlayerStatePatches
 {

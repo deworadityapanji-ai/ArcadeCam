@@ -5,6 +5,13 @@ required by their licenses.
 
 ---
 
+## ChaseCamPlus
+
+ArcadeCam is derived from [ChaseCamPlus by CarloApri](https://github.com/CarloApri/NO-ChaseCamPlus).
+Copyright (c) 2026 CarloApri. The full original MIT notice is preserved in LICENSE.
+
+---
+
 ## YawOnMouse
 
 Copyright (c) 2024 Muj — MIT License

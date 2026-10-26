@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../ChaseCamPlus/GameDir.targets" />
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>disable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BepInEx"><HintPath>$(GameDir)/BepInEx/core/BepInEx.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameDir)/NuclearOption_Data/Managed/UnityEngine.CoreModule.dll</HintPath></Reference>
+    <Compile Include="../../ChaseCamPlus/Helpers/PresetManager.cs" Link="PresetManager.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/CameraPreset.cs" Link="CameraPreset.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/CenteringBehavior.cs" Link="CenteringBehavior.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/HudAttachment.cs" Link="HudAttachment.cs" />
+  </ItemGroup>
+</Project>

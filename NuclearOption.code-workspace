@@ -1,0 +1,26 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/bin": true,
+      "**/obj": true,
+      ".tools": true
+    },
+    "search.exclude": {
+      "**/bin": true,
+      "**/obj": true,
+      ".tools/**": true,
+      ".reference/**": true
+    },
+    "terminal.integrated.cwd": "${workspaceFolder}"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csharp"
+    ]
+  }
+}

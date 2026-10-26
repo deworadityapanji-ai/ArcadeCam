@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../ChaseCamPlus/GameDir.targets" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../ChaseCamPlus/Helpers/FreeLookInputState.cs" Link="FreeLookInputState.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/TargetLookBlend.cs" Link="TargetLookBlend.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/CameraCentering.cs" Link="CameraCentering.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/ChaseEntryPolicy.cs" Link="ChaseEntryPolicy.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/TargetCameraFraming.cs" Link="TargetCameraFraming.cs" />
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Compile Include="../../ChaseCamPlus/Helpers/CenteringBehavior.cs" Link="CenteringBehavior.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/CameraGeometryMath.cs" Link="CameraGeometryMath.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/HudAttachment.cs" Link="HudAttachment.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/CameraMotionState.cs" Link="CameraMotionState.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/CameraPreset.cs" Link="CameraPreset.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/StableActionId.cs" Link="StableActionId.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/HudLayoutMath.cs" Link="HudLayoutMath.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/HudCanvasMath.cs" Link="HudCanvasMath.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/HudLayoutStamp.cs" Link="HudLayoutStamp.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/ViewReturnBlend.cs" Link="ViewReturnBlend.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/TargetingScreenLayout.cs" Link="TargetingScreenLayout.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/FreeLookAngles.cs" Link="FreeLookAngles.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/TargetingFeedReadiness.cs" Link="TargetingFeedReadiness.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/WeaponCameraState.cs" Link="WeaponCameraState.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/WeaponCameraMotion.cs" Link="WeaponCameraMotion.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/WeaponCameraFollow.cs" Link="WeaponCameraFollow.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/WeaponImpactMotion.cs" Link="WeaponImpactMotion.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/VisibilityOverride.cs" Link="VisibilityOverride.cs" />
+  </ItemGroup>
+</Project>

@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
-using ChaseCamPlus.Helpers;
+using ArcadeCam.Helpers;
 using HarmonyLib;
 
-namespace ChaseCamPlus.Patches;
+namespace ArcadeCam.Patches;
 
 /// <summary>
 /// Workaround for a vanilla bug, gated behind the <c>FixWeaponFoV</c> config flag (off by default).

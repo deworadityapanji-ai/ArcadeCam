@@ -3,17 +3,12 @@
 
     <PropertyGroup>
         <TargetFramework>net472</TargetFramework>
-        <AssemblyName>ChaseCamPlus</AssemblyName>
-        <Product>ChaseCamPlus</Product>
-        <Version>2.0.0</Version>
+        <AssemblyName>ArcadeCam</AssemblyName>
+        <Product>ArcadeCam</Product>
+        <Version>0.1.12</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
-        <RestoreAdditionalProjectSources>
-            https://api.nuget.org/v3/index.json;
-            https://nuget.bepinex.dev/v3/index.json;
-            https://nuget.samboy.dev/v3/index.json
-        </RestoreAdditionalProjectSources>
-        <RootNamespace>ChaseCamPlus</RootNamespace>
+        <RootNamespace>ArcadeCam</RootNamespace>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug'">
@@ -60,6 +55,18 @@
         <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
         <Private>false</Private>
       </Reference>
+      <Reference Include="UnityEngine.UI">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.UI.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
+      <Reference Include="UnityEngine.UIModule">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
+      <Reference Include="UnityEngine.IMGUIModule">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
       <Reference Include="UnityEngine.InputLegacyModule">
         <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
         <Private>false</Private>
@@ -69,8 +76,8 @@
     <!-- Opt in with: dotnet build -p:InstallToGame=true
          One folder per mod, matching how the other plugins in this install are laid out. -->
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(InstallToGame)' == 'true'">
-      <MakeDir Directories="$(GameDir)\BepInEx\plugins\ChaseCamPlus" />
-      <Copy SourceFiles="$(TargetDir)ChaseCamPlus.dll"
-            DestinationFolder="$(GameDir)\BepInEx\plugins\ChaseCamPlus" />
+      <MakeDir Directories="$(GameDir)\BepInEx\plugins\ArcadeCam" />
+      <Copy SourceFiles="$(TargetDir)ArcadeCam.dll"
+            DestinationFolder="$(GameDir)\BepInEx\plugins\ArcadeCam" />
     </Target>
 </Project>

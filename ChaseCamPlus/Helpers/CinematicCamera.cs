@@ -1,6 +1,7 @@
 using UnityEngine;
+using ArcadeCam.Patches;
 
-namespace ChaseCamPlus.Helpers;
+namespace ArcadeCam.Helpers;
 
 /// <summary>
 /// A cinematic chase camera, where the aircraft is allowed to rotate and drift inside the frame
@@ -40,9 +41,8 @@ namespace ChaseCamPlus.Helpers;
 /// <see cref="FloatingOrigin"/> that shifts the world out from under the camera; a cached absolute
 /// position would survive that shift as a wrong one.
 ///
-/// The numbers live in <see cref="CinematicTuning"/>. There is no configuration: the
-/// <c>Chase Camera Roll Toggle</c> binding chooses between this camera and the game's own, and
-/// nothing else about it is adjustable.
+/// Tuning lives in <see cref="CinematicTuning"/>. LevelHorizonByDefault selects this
+/// camera on chase entry, and Chase Camera Roll Toggle changes it while flying.
 /// </summary>
 internal static class CinematicCamera
 {
@@ -76,6 +76,7 @@ internal static class CinematicCamera
     private const float CruiseSpeedLag = 3f;
 
     private static bool _on;
+    private static bool _recenterAnchor;
     private static float _blend;
     private static bool _settled;
 
@@ -95,17 +96,43 @@ internal static class CinematicCamera
     /// callers that care (the turret, the HUD) are already inside a chase-only path.
     /// </summary>
     internal static bool Active => _on;
+    internal static bool IsTransitioning => _on ? _blend < 1f : _blend > 0f;
+
+    internal static Vector3 OrbitReferenceUp(CameraStateManager cam)
+    {
+        // During hand-over the rendered base is a mix of the two rigs. Its own
+        // up remains perpendicular to its forward, unlike the destination's up.
+        if (IsTransitioning) return cam.transform.up;
+        return _on ? Vector3.up : cam.followingUnit.transform.up;
+    }
+
+    internal static void SetEnabled(bool enabled)
+    {
+        if (_on == enabled) return;
+        CameraChaseStatePatches.PreserveLookForHorizonChange();
+        _on = enabled;
+        if (_on) _settled = false;
+    }
+
+    internal static void Recenter()
+    {
+        Reset();
+        _recenterAnchor = true;
+        if (_on) _blend = 1f;
+    }
+
 
     /// <summary>
     /// Drops the smoothing state so the next frame places the camera outright instead of easing in
     /// from wherever the last chase session left it. Called when the chase state is entered.
     ///
     /// Deliberately does not touch <c>_on</c>. Which of the two cameras you chose is not part of the
-    /// smoothing, so leaving the cockpit and coming back returns you to the one you were using.
+    /// smoothing. Chase entry applies the configured default separately.
     /// </summary>
     internal static void Reset()
     {
         _settled = false;
+        _recenterAnchor = false;
         _blend = 0f;
         _offsetVelocity = Vector3.zero;
         _stretch = 0f;
@@ -137,7 +164,7 @@ internal static class CinematicCamera
         if (picker != null && picker.isOpen)
             return;
 
-        _on = !_on;
+        SetEnabled(!_on);
 
         // Only on the way in. Clearing it on the way out would drop the lag the model is currently
         // carrying — and since the blend is still at 1 that frame, the camera would jump to the
@@ -183,6 +210,15 @@ internal static class CinematicCamera
 
         Vector3 vanillaPosition = cam.transform.position;
         Quaternion vanillaRotation = cam.transform.rotation;
+        if (!_settled)
+        {
+            // A new level-horizon session starts from the current rig, not the
+            // rotation/right vector saved the last time this mode was used.
+            _rotation = vanillaRotation;
+            _lastRight = cam.transform.right;
+            _lastVelocity = velocity;
+            _course = velocity;
+        }
 
         UpdateAnchor(aircraft, velocity, dt);
         UpdateRollReference(aircraft, dt);
@@ -230,10 +266,11 @@ internal static class CinematicCamera
         float speed = velocity.magnitude;
         Vector3 nose = aircraft.forward;
 
-        Vector3 wanted = speed > 0.001f
+        Vector3 wanted = !_recenterAnchor && speed > 0.001f
             ? Vector3.Slerp(nose, velocity / speed, Mathf.InverseLerp(SlowSpeed, FlyingSpeed, speed))
             : nose;
 
+        _recenterAnchor = false;
         _anchor = _settled
             ? Vector3.Slerp(_anchor, wanted, Damping(CinematicTuning.BoomLag, dt)).normalized
             : wanted;
@@ -354,7 +391,7 @@ internal static class CinematicCamera
         float distance = size
                          * CinematicTuning.Distance
                          * (1f + CinematicTuning.SpeedPullback * fast)
-                         * (1f + Mathf.Max(zoom, 0f));
+                         * Mathf.Max(1f + zoom, 0.1f);
 
         return new Vector3(0f, distance * height, -(distance + stretch));
     }
