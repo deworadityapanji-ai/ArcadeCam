@@ -17,6 +17,7 @@ internal sealed class ChaseHudUpdater : MonoBehaviour
         else
             HudElements.RestoreAttachments();
         WeaponCamera.Prepare(cam);
+        WeaponCameraAudio.Tick(cam);
         TargetingScreenOverlay.Tick(cam);
     }
 

@@ -61,6 +61,15 @@ differently, please open an issue.
 
 ## Build dependencies
 
+### Optional WT Mouse Aim interoperability
+
+[WT Mouse Aim](https://github.com/cosistra/wt-mouse-aim), by cosistra, is an optional separate mod.
+ArcadeCam's independently implemented compatibility adapter targets its 0.68.0 aim/look/configuration
+API and adapts camera-context/overlay checks at runtime. Its flight-controller code, original camera
+patches, DLL and configuration files are not bundled or replaced. Users install WT Mouse Aim separately.
+
+### Referenced build dependencies
+
 Not redistributed — referenced at build time and expected to be present at runtime.
 
 - [BepInEx](https://github.com/BepInEx/BepInEx) — LGPL-2.1

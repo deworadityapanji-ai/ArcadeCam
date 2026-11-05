@@ -8,6 +8,7 @@ using UnityEngine;
 namespace ArcadeCam;
 
 [BepInDependency(OriginalModCompatibility.OriginalGuid, BepInDependency.DependencyFlags.SoftDependency)]
+[BepInDependency(WtMouseAimCompatibility.Guid, BepInDependency.DependencyFlags.SoftDependency)]
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class Plugin : BaseUnityPlugin
 {
@@ -34,6 +35,7 @@ public class Plugin : BaseUnityPlugin
 
     public static ConfigEntry<bool> EnableArcadeCam;
     public static ConfigEntry<CameraPreset> Preset;
+    public static ConfigEntry<bool> WTMouseAimSupport;
     internal static bool IsActive { get; private set; }
     public static ConfigEntry<bool> CenteringEnabled;
     public static ConfigEntry<float> TargetReturnSeconds;
@@ -54,6 +56,7 @@ public class Plugin : BaseUnityPlugin
     public static ConfigEntry<float> WeaponCameraReturnSeconds;
     public static ConfigEntry<float> WeaponCameraFieldOfView;
     public static ConfigEntry<bool> WeaponCameraHideHud;
+    public static ConfigEntry<bool> WeaponCameraFollowAudio;
     public static ConfigEntry<bool> VirtualJoystick;
     public static ConfigEntry<bool> TargetingScreenEnabled;
     public static ConfigEntry<float> TargetingScreenXPercent;
@@ -76,6 +79,7 @@ public class Plugin : BaseUnityPlugin
     public static ConfigEntry<bool> ChaseViewByDefault;
     public static ConfigEntry<bool> FreeLookOnChaseEntry;
     public static ConfigEntry<bool> LevelHorizonByDefault;
+    public static ConfigEntry<LevelCameraStyle> LevelHorizonStyle;
     public static ConfigEntry<bool> CenterAfterTargetLook;
     public static ConfigEntry<bool> MoveCameraForTargetLook;
     public static ConfigEntry<float> CenteringForce;
@@ -124,6 +128,8 @@ public class Plugin : BaseUnityPlugin
             "Enable ArcadeCam. Requires restarting the game. Off lets the original ChaseCamPlus control chase view if installed.");
         Preset = Config.Bind("ArcadeCam", "Preset", CameraPreset.Custom,
             "Apply a starting point when this selection changes. Edit any setting freely; the selected name and edited values survive restart. Custom restores your last saved user-edited setup.");
+        WTMouseAimSupport = Config.Bind("Compatibility", "WTMouseAimSupport", false,
+            "Opt-in camera/input bridge for WT Mouse Aim 0.68.0. WT keeps its mouse-flight instructor; ArcadeCam provides chase framing, HUD, free look and weapon view. Enable WT's own mouse aiming and CameraFollow too. Starts chase in aiming mode; ArcadeCam Free Look or WT's freeze binding looks around.");
         CenteringEnabled = Config.Bind(SectionFreeLook, "CenteringEnabled", false,
             "Enable automatic free-look centering without changing its strength. Also controlled by the ArcadeCam Centering Toggle binding. Target-look return uses its own setting.");
         TargetReturnSeconds = Config.Bind(SectionTargetLook, "TargetReturnSeconds", 0.45f,
@@ -163,6 +169,8 @@ public class Plugin : BaseUnityPlugin
             new ConfigDescription("Field of view used only to render the weapon camera. The aircraft view keeps its own setting.", new AcceptableValueRange<float>(25f, 90f)));
         WeaponCameraHideHud = Config.Bind("Weapon Camera", "WeaponCameraHideHud", true,
             "Hide native flight instruments, combat HUD, helmet readouts and minimap throughout weapon tracking, impact/wreckage viewing and return. Restores each canvas's previous visibility afterward; flight controls and HUD updates remain active.");
+        WeaponCameraFollowAudio = Config.Bind("Weapon Camera", "WeaponCameraFollowAudio", true,
+            "Hear the world from the weapon-camera viewpoint, including native explosion delay and supersonic sound checks. Restores aircraft audio on return. No extra explosion sounds or volume boost are added.");
         TargetingScreenEnabled = Config.Bind("Targeting Screen", "TargetingScreenEnabled", true,
             "Show the aircraft's native cockpit targeting-camera feed on the chase HUD when a target is selected. Uses the same sensor and overlay; hides when the native camera is unavailable.");
         TargetingScreenXPercent = Config.Bind("Targeting Screen", "TargetingScreenXPercent", 100f,
@@ -223,7 +231,10 @@ public class Plugin : BaseUnityPlugin
             "Start toggle free look automatically on entering chase. Hold mode still requires holding the binding. Applies on the next chase entry.");
         LevelHorizonByDefault = Config.Bind(
             SectionDefaults, "LevelHorizonByDefault", true,
-            "Start with the level-horizon cinematic chase camera on each chase entry. ArcadeCam Horizon Toggle can change it while flying.");
+            "Start with the selected level-horizon style on each chase entry. ArcadeCam Horizon Toggle switches between it and aircraft-relative chase while flying.");
+        LevelHorizonStyle = Config.Bind(
+            SectionDefaults, "LevelHorizonStyle", LevelCameraStyle.Cinematic,
+            "Cinematic retains the drifting level-horizon camera. Orbit uses upright, aircraft-centered framing following horizontal travel, like vanilla orbit, with ArcadeCam controls and HUD. Orbit skips added speed/pitch motion. Applies immediately while the level horizon is active.");
         CenterAfterTargetLook = Config.Bind(
             SectionTargetLook, "CenterAfterTargetLook", true,
             "Return to the centered forward chase view when target look ends, instead of restoring the previous manual viewing angle. Applies immediately.");
@@ -307,6 +318,8 @@ public class Plugin : BaseUnityPlugin
         {
             OriginalModCompatibility.TakeControl(harmony);
             harmony.PatchAll();
+            WtMouseAimCompatibility.Initialize(harmony);
+            WTMouseAimSupport.SettingChanged += WtMouseAimCompatibility.SettingsChanged;
             HudElements.Initialize();
             WeaponCamera.Initialize(harmony);
             _hudUpdater = gameObject.AddComponent<ChaseHudUpdater>();
@@ -343,6 +356,8 @@ public class Plugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        if (WTMouseAimSupport != null) WTMouseAimSupport.SettingChanged -= WtMouseAimCompatibility.SettingsChanged;
+        WtMouseAimCompatibility.Dispose();
         if (_hudUpdater != null) Destroy(_hudUpdater);
         WeaponCamera.Dispose();
         HudElements.Dispose();

@@ -41,6 +41,12 @@ internal static class WeaponCamera
 
     internal static bool IsDisplaying => State.Displaying;
 
+    internal static bool TryGetAudioPose(CameraStateManager cam, out GlobalPosition position, out Quaternion rotation)
+    {
+        position = _position; rotation = _rotation;
+        return _prepared && State.Displaying && cam == _camera && ValidContext(cam);
+    }
+
     internal static void Initialize(Harmony harmony)
     {
         if (_initialized) return;
@@ -136,7 +142,7 @@ internal static class WeaponCamera
             Motion.Reset(); Follow.Reset();
             ImpactTarget.Reset(); _impactFollowing = false;
         }
-        if (!State.Displaying) { _prepared = false; _startPending = false; RestoreHud(); }
+        if (!State.Displaying) { _prepared = false; _startPending = false; WeaponCameraAudio.Restore(); RestoreHud(); }
         if (down && allowed && !latest.HasValue && !State.Displaying)
             Plugin.Logger.LogInfo("Weapon camera: no live player missile/bomb; chase view unchanged.");
     }
@@ -148,7 +154,7 @@ internal static class WeaponCamera
     internal static void Prepare(CameraStateManager cam)
     {
         _prepared = false;
-        if (!State.Displaying) { _tracked = null; ImpactTarget.Reset(); RestoreHud(); return; }
+        if (!State.Displaying) { _tracked = null; ImpactTarget.Reset(); WeaponCameraAudio.Restore(); RestoreHud(); return; }
         if (!Plugin.WeaponCameraEnabled.Value || cam != _camera || !ValidContext(cam)) { Cancel(); return; }
         if (_startPending)
         {
@@ -202,7 +208,7 @@ internal static class WeaponCamera
         }
         State.Advance(dt, _impactFollowing ? _impactDuration : impactSeconds, Plugin.WeaponCameraReturnSeconds.Value);
         if (State.Phase != WeaponViewPhase.Following && State.Phase != WeaponViewPhase.Impact) ImpactTarget.Reset();
-        if (!State.Displaying) { _tracked = null; _posePhase = WeaponViewPhase.Off; RestoreHud(); return; }
+        if (!State.Displaying) { _tracked = null; _posePhase = WeaponViewPhase.Off; WeaponCameraAudio.Restore(); RestoreHud(); return; }
 
         if (State.Phase == WeaponViewPhase.Following)
         {
@@ -385,6 +391,7 @@ internal static class WeaponCamera
 
     internal static void Cancel()
     {
+        WeaponCameraAudio.Restore();
         RestoreVisual(); RestoreHud();
         State.Cancel(_held); _prepared = false; _tracked = null;
         _impactPending = false; _ended = false; _startPending = false; _posePhase = WeaponViewPhase.Off;
@@ -394,6 +401,7 @@ internal static class WeaponCamera
 
     internal static void Dispose()
     {
+        WeaponCameraAudio.Dispose();
         Cancel(); BindOwner(null);
         if (!_initialized) return;
         RenderPipelineManager.beginCameraRendering -= BeginRender;

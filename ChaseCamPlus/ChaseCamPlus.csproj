@@ -5,7 +5,7 @@
         <TargetFramework>net472</TargetFramework>
         <AssemblyName>ArcadeCam</AssemblyName>
         <Product>ArcadeCam</Product>
-        <Version>0.1.12</Version>
+        <Version>1.13.0</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
         <RootNamespace>ArcadeCam</RootNamespace>

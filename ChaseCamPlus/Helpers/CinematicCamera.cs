@@ -4,7 +4,9 @@ using ArcadeCam.Patches;
 namespace ArcadeCam.Helpers;
 
 /// <summary>
-/// A cinematic chase camera, where the aircraft is allowed to rotate and drift inside the frame
+/// Shared level-horizon controller. OrbitCamera supplies the optional centered
+/// orbit rig; both styles share horizon toggling, hand-over and free-look rebasing.
+/// The cinematic style described below lets the aircraft rotate and drift inside the frame
 /// instead of the world rotating around it.
 ///
 /// Five things separate it from the vanilla chase state, all visible frame by frame in reference
@@ -79,6 +81,11 @@ internal static class CinematicCamera
     private static bool _recenterAnchor;
     private static float _blend;
     private static bool _settled;
+    private static LevelCameraStyle _style;
+    private static bool _hasLevelPose, _styleChanging;
+    private static float _styleBlend;
+    private static Vector3 _lastLevelOffset, _styleFromOffset;
+    private static Quaternion _lastLevelRotation, _styleFromRotation;
 
     private static Vector3 _anchor;
     private static Vector3 _offset;
@@ -96,7 +103,8 @@ internal static class CinematicCamera
     /// callers that care (the turret, the HUD) are already inside a chase-only path.
     /// </summary>
     internal static bool Active => _on;
-    internal static bool IsTransitioning => _on ? _blend < 1f : _blend > 0f;
+    internal static bool IsTransitioning => (_on ? _blend < 1f : _blend > 0f) || _styleChanging;
+    internal static bool UsesOrbit => _style == LevelCameraStyle.Orbit && (_on || _blend > 0f);
 
     internal static Vector3 OrbitReferenceUp(CameraStateManager cam)
     {
@@ -111,7 +119,7 @@ internal static class CinematicCamera
         if (_on == enabled) return;
         CameraChaseStatePatches.PreserveLookForHorizonChange();
         _on = enabled;
-        if (_on) _settled = false;
+        if (_on) { _settled = false; OrbitCamera.Reset(); }
     }
 
     internal static void Recenter()
@@ -136,6 +144,10 @@ internal static class CinematicCamera
         _blend = 0f;
         _offsetVelocity = Vector3.zero;
         _stretch = 0f;
+        _style = Plugin.LevelHorizonStyle.Value;
+        _hasLevelPose = _styleChanging = false;
+        _styleBlend = 0f;
+        OrbitCamera.Reset();
     }
 
     /// <summary>
@@ -196,7 +208,21 @@ internal static class CinematicCamera
         if (!_on && _blend <= 0f)
         {
             _settled = false;
+            _hasLevelPose = _styleChanging = false;
             return false;
+        }
+
+        LevelCameraStyle requestedStyle = Plugin.LevelHorizonStyle.Value;
+        if (_style != requestedStyle)
+        {
+            CameraChaseStatePatches.PreserveLookForHorizonChange();
+            _style = requestedStyle;
+            _styleChanging = _hasLevelPose;
+            _styleBlend = 0f;
+            _styleFromOffset = _lastLevelOffset;
+            _styleFromRotation = _lastLevelRotation;
+            _settled = false;
+            OrbitCamera.Reset();
         }
 
         Transform aircraft = cam.followingUnit.transform;
@@ -220,36 +246,50 @@ internal static class CinematicCamera
             _course = velocity;
         }
 
-        UpdateAnchor(aircraft, velocity, dt);
-        UpdateRollReference(aircraft, dt);
+        if (_style == LevelCameraStyle.Orbit)
+        {
+            OrbitCamera.ReadPose(cam, zoom, out _offset, out _rotation);
+        }
+        else
+        {
+            UpdateAnchor(aircraft, velocity, dt);
+            UpdateRollReference(aircraft, dt);
+            float stretch = UpdateStretch(velocity, dt);
+            float cruise = UpdateCruiseSpeed(velocity.magnitude, dt);
 
-        float stretch = UpdateStretch(velocity, dt);
-        float cruise = UpdateCruiseSpeed(velocity.magnitude, dt);
-
-        // The field of view the frame will actually render at, which the chase state has already
-        // written by the time this runs — the player's External Field of View setting with their FoV
-        // axis folded in. The composition is stated in fractions of the frame and the angles are
-        // worked back out of this, so both follow the player's own view setting rather than fighting
-        // it. Nothing here writes the field of view.
-        float fov = cam.mainCamera != null ? cam.mainCamera.fieldOfView : 60f;
-
-        Quaternion boom = BoomRotation();
-        Vector3 target = boom * BoomOffset(
-            cam.followingUnit.definition, cruise, stretch, zoom, RideHeight(fov));
-
-        UpdateOffset(target, velocity, dt);
-        UpdateRotation(dt, FramingPitch(fov));
+            // Cinematic composition follows external FoV; orbit centers the
+            // aircraft directly and has no FoV-dependent drift or roll arm.
+            float fov = cam.mainCamera != null ? cam.mainCamera.fieldOfView : 60f;
+            Quaternion boom = BoomRotation();
+            Vector3 target = boom * BoomOffset(
+                cam.followingUnit.definition, cruise, stretch, zoom, RideHeight(fov));
+            UpdateOffset(target, velocity, dt);
+            UpdateRotation(dt, FramingPitch(fov));
+            ApplyFramingGuard(cam.mainCamera);
+        }
 
         // MoveTowards rather than a damped approach: an ease that never quite arrives would leave
         // the mode permanently a few percent short of itself.
         _blend = Mathf.MoveTowards(_blend, _on ? 1f : 0f, dt / TransitionTime);
         float t = Mathf.SmoothStep(0f, 1f, _blend);
 
-        ApplyFramingGuard(cam.mainCamera);
+        Vector3 levelOffset = _offset;
+        Quaternion levelRotation = _rotation;
+        if (_styleChanging)
+        {
+            _styleBlend = Mathf.MoveTowards(_styleBlend, 1f, Time.unscaledDeltaTime / TransitionTime);
+            float styleWeight = Mathf.SmoothStep(0f, 1f, _styleBlend);
+            levelOffset = Vector3.Slerp(_styleFromOffset, levelOffset, styleWeight);
+            levelRotation = Quaternion.Slerp(_styleFromRotation, levelRotation, styleWeight);
+            _styleChanging = _styleBlend < 1f;
+        }
+        _lastLevelOffset = levelOffset;
+        _lastLevelRotation = levelRotation;
+        _hasLevelPose = true;
 
         cam.transform.SetPositionAndRotation(
-            Vector3.Lerp(vanillaPosition, origin + _offset, t),
-            Quaternion.Slerp(vanillaRotation, _rotation, t));
+            Vector3.Lerp(vanillaPosition, origin + levelOffset, t),
+            Quaternion.Slerp(vanillaRotation, levelRotation, t));
 
         _settled = true;
         return true;

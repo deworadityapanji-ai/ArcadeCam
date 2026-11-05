@@ -10,6 +10,8 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
     <Compile Include="../../ChaseCamPlus/Helpers/ChasePresetInput.cs" Link="ChasePresetInput.cs" />
     <Compile Include="../../ChaseCamPlus/Patches/ChasePresetInputPatches.cs" Link="ChasePresetInputPatches.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/GlocView.cs" Link="GlocView.cs" />
+    <Compile Include="../../ChaseCamPlus/Patches/GLOCPatches.cs" Link="GLOCPatches.cs" />
     <Reference Include="0Harmony"><HintPath>$(GameDir)\BepInEx\core\0Harmony.dll</HintPath></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(GameDir)\NuclearOption_Data\Managed\Assembly-CSharp.dll</HintPath></Reference>
     <Reference Include="Mirage"><HintPath>$(GameDir)\NuclearOption_Data\Managed\Mirage.dll</HintPath></Reference>

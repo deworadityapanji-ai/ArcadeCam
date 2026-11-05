@@ -95,7 +95,8 @@ internal static class ChaseTargetLook
                 if (Plugin.MoveCameraForTargetLook.Value)
                 {
                     float distance = Mathf.Max(baseOffset.magnitude, cam.followingUnit.maxRadius * 2f + 1f);
-                    Vector3 up = CinematicCamera.Active ? Vector3.up : cam.followingUnit.transform.up;
+                    Vector3 up = WtMouseAimCompatibility.OwnsChase(cam) ? Vector3.up
+                        : CinematicCamera.Active ? Vector3.up : cam.followingUnit.transform.up;
                     wantedOffset = TargetCameraFraming.Offset(targetPosition - pivot, up, distance);
                 }
                 // Spherical movement avoids crossing through the aircraft on a rear target.
@@ -121,7 +122,8 @@ internal static class ChaseTargetLook
             Vector3 direction = targetPosition - cam.transform.position;
             if (direction.sqrMagnitude > 0.0001f)
             {
-                Vector3 up = CinematicCamera.Active ? Vector3.up : cam.followingUnit.transform.up;
+                Vector3 up = WtMouseAimCompatibility.OwnsChase(cam) ? Vector3.up
+                    : CinematicCamera.Active ? Vector3.up : cam.followingUnit.transform.up;
                 up = Vector3.ProjectOnPlane(up, direction.normalized);
                 if (up.sqrMagnitude < 0.0001f)
                     up = Vector3.ProjectOnPlane(cam.transform.right, direction.normalized);

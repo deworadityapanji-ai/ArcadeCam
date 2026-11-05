@@ -132,6 +132,39 @@ Check(Plugin.WeaponCameraToggle.Value && Math.Abs(Plugin.WeaponCameraImpactSecon
 Check(Plugin.WeaponCameraFollowHitTarget.Value && Plugin.WeaponCameraWreckageSeconds.Value == 2.5f
     && Plugin.WeaponCameraImpactShake.Value == 0.2f && Plugin.WeaponCameraHideHud.Value,
     "Custom explicitly restores saved aftermath and HUD-hiding settings");
+// The new preset is opt-in. Existing profile choices remain reproducible, and
+// the new enum persists through the real BepInEx serializer and Custom profile.
+Plugin.Preset.Value = CameraPreset.Orbit;
+Check(Plugin.LevelHorizonByDefault.Value && Plugin.LevelHorizonStyle.Value == LevelCameraStyle.Orbit,
+    "Orbit selects the steady level-horizon rig");
+Check(!Plugin.SpeedMotionEnabled.Value && !Plugin.PitchFollowEnabled.Value && !Plugin.CenteringEnabled.Value,
+    "Orbit starts without cinematic motion or automatic centering");
+Check(Plugin.LeftInstruments.Value == HudAttachment.Camera && Plugin.RightInstruments.Value == HudAttachment.Camera,
+    "Orbit includes camera-attached flight instruments");
+Check(Plugin.WeaponCameraToggle.Value && Plugin.WeaponCameraHideHud.Value
+    && Plugin.Compass.Value == HudAttachment.Aircraft && Plugin.Waterline.Value == HudAttachment.Hidden,
+    "Orbit preserves independent weapon-camera and compass/waterline preferences");
+Boot();
+Check(Plugin.Preset.Value == CameraPreset.Orbit && Plugin.LevelHorizonStyle.Value == LevelCameraStyle.Orbit,
+    "Orbit and its level-horizon style survive restart");
+Plugin.CameraDistanceScale.Value = 1.17f;
+Plugin.Preset.Value = CameraPreset.WarThunder;
+Check(Plugin.LevelHorizonStyle.Value == LevelCameraStyle.Cinematic && Plugin.LevelHorizonByDefault.Value,
+    "Existing WarThunder preset still explicitly selects cinematic level horizon");
+Plugin.Preset.Value = CameraPreset.Custom;
+Check(Plugin.LevelHorizonStyle.Value == LevelCameraStyle.Orbit && Math.Abs(Plugin.CameraDistanceScale.Value - 1.17f) < 0.001f,
+    "Custom restores the edited orbit style and framing after trying another preset");
+Plugin.WTMouseAimSupport.Value = true;
+Plugin.WeaponCameraFollowAudio.Value = false;
+Plugin.Preset.Value = CameraPreset.AceCombat;
+Check(Plugin.WTMouseAimSupport.Value && !Plugin.WeaponCameraFollowAudio.Value,
+    "Camera presets preserve optional WT compatibility and weapon-audio preferences");
+Boot();
+Check(Plugin.WTMouseAimSupport.Value && !Plugin.WeaponCameraFollowAudio.Value,
+    "Optional compatibility/audio choices survive restart");
+Plugin.Preset.Value = CameraPreset.Custom;
+Check(Plugin.WTMouseAimSupport.Value && !Plugin.WeaponCameraFollowAudio.Value,
+    "Custom explicitly restores compatibility/audio choices");
 string custom = File.ReadAllText(Path.Combine(root, "ArcadeCam.custom.cfg"));
 Check(!custom.Contains("EnableArcadeCam") && !custom.Contains("\nPreset ="), "Custom does not overwrite plugin ownership or preset selection");
 Console.WriteLine($"PASS: {checks} checks using real BepInEx config serialization, saved profiles and restarts.");

@@ -20,6 +20,11 @@
     <Compile Include="../../ChaseCamPlus/Helpers/HudAttachment.cs" Link="HudAttachment.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/CameraMotionState.cs" Link="CameraMotionState.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/CameraPreset.cs" Link="CameraPreset.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/LevelCameraStyle.cs" Link="LevelCameraStyle.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/OrbitCourse.cs" Link="OrbitCourse.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/OriginShiftSnapshot.cs" Link="OriginShiftSnapshot.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/AimViewFraming.cs" Link="AimViewFraming.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/MouseAimFrame.cs" Link="MouseAimFrame.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/StableActionId.cs" Link="StableActionId.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/HudLayoutMath.cs" Link="HudLayoutMath.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/HudCanvasMath.cs" Link="HudCanvasMath.cs" />

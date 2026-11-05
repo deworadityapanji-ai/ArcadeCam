@@ -853,9 +853,172 @@ flightCanvas.Enabled = false;
 hudVisibility.Hide(flightCanvas); hudVisibility.Restore();
 Expect(flightCanvas.Enabled, false, "A new weapon session takes a fresh snapshot of current visibility");
 
-Console.WriteLine($"PASS: {checks} camera, motion, input, HUD and targeting-screen layout/availability checks.");
+// Orbit follows horizontal travel and keeps a defined heading through vertical
+// flight, stops, reversals, pauses and a fresh aircraft/camera session.
+var orbitPreset = PresetValues.For(CameraPreset.Orbit);
+Expect(orbitPreset.LevelHorizon && orbitPreset.LevelStyle == LevelCameraStyle.Orbit
+    && !orbitPreset.SpeedMotion && !orbitPreset.PitchFollow && !orbitPreset.Centering, true,
+    "Orbit preset selects upright steady framing without added motion or automatic centering");
+Expect(PresetValues.For(CameraPreset.WarThunder).LevelStyle == LevelCameraStyle.Cinematic, true,
+    "The existing WarThunder preset retains its cinematic level-horizon style");
+var orbitCourse = new OrbitCourse();
+Vector3 orbitAhead = orbitCourse.Advance(new Vector3(0f, 30f, 120f), Vector3.forward, 0.02f);
+Near(orbitAhead.y, 0f, "Climbing does not pitch the orbit course");
+Near(orbitAhead.z, 1f, "Initial orbit heading follows horizontal travel");
+for (int frame = 0; frame < 180; frame++)
+{
+    float pitch = frame * (float)Math.PI / 90f;
+    Vector3 nose = new(0f, (float)Math.Sin(pitch), (float)Math.Cos(pitch));
+    Vector3 heading = orbitCourse.Advance(new Vector3(0f, frame - 90f, 120f), nose, 1f / 60f);
+    Near(heading.y, 0f, "Loop pitch/vertical velocity cannot tilt orbit heading");
+    Near(heading.z, 1f, "An aircraft rotating about a stable course stays centered");
+}
+Vector3 beforeVertical = orbitCourse.Advance(Vector3.right * 150f, Vector3.right, 0.1f);
+Vector3 duringVertical = orbitCourse.Advance(Vector3.up * 150f, Vector3.up, 0.02f);
+Near((duringVertical - beforeVertical).sqrMagnitude, 0f, "Vertical flight retains the last defined horizontal heading");
+Vector3 pausedOrbit = orbitCourse.Advance(Vector3.back * 150f, Vector3.back, 0f);
+Near((pausedOrbit - duringVertical).sqrMagnitude, 0f, "Zero elapsed time cannot move an initialized orbit heading");
+Vector3 negativeOrbit = orbitCourse.Advance(Vector3.back * 150f, Vector3.back, -1f);
+Near((negativeOrbit - duringVertical).sqrMagnitude, 0f, "Negative elapsed time cannot reverse smoothing");
+orbitCourse.Reset();
+Near(orbitCourse.Advance(Vector3.zero, Vector3.left, 0.02f).x, -1f, "A stopped aircraft uses its horizontal nose direction");
+orbitCourse.Reset();
+Vector3 poleStart = orbitCourse.Advance(Vector3.up * 200f, Vector3.up, 0f);
+Near(poleStart.sqrMagnitude, 1f, "Entering directly vertical starts with a valid heading");
+Near(poleStart.y, 0f, "The vertical-entry fallback is horizontal");
+orbitCourse.Reset();
+orbitCourse.Advance(Vector3.forward * 100f, Vector3.forward, 0.02f);
+Vector3 turnStart = orbitCourse.Advance(Vector3.right * 100f, Vector3.right, 0.02f);
+Expect(turnStart.x > 0f && turnStart.z > 0f, true, "Orbit turns toward a new course without an instant heading snap");
+for (int frame = 0; frame < 180; frame++) orbitCourse.Advance(Vector3.right * 100f, Vector3.right, 1f / 60f);
+Near(orbitCourse.Advance(Vector3.right * 100f, Vector3.right, 0.02f).x, 1f, "Orbit settles onto the new travel direction");
+orbitCourse.Reset();
+Near(orbitCourse.Advance(Vector3.back * 100f, Vector3.forward, 0.02f).z, -1f,
+    "A new camera session discards the previous aircraft's course");
+foreach (float radius in new[] { 0f, 1f, 8f, 35f })
+{
+    float normalDistance = OrbitCourse.Distance(radius, 0f);
+    Near(normalDistance, 2f * (1f + radius), "Orbit distance scales with aircraft radius");
+    Expect(OrbitCourse.Distance(radius, -0.75f) <= normalDistance, true, "Zooming in shortens the orbit arm");
+    Expect(OrbitCourse.Distance(radius, 1f) >= normalDistance, true, "Zooming out lengthens the orbit arm");
+    Expect(OrbitCourse.Distance(radius, -100f) >= 2f, true, "Extreme close zoom retains a finite offset");
+}
+orbitCourse.Reset();
+orbitCourse.Advance(Vector3.zero, Vector3.forward, 0.1f);
+Near(orbitCourse.Advance(Vector3.zero, Vector3.back, 0.05f).z, -1f,
+    "An exact 180-degree reversal cannot leave orbit stuck on its old heading");
+// Reproduce the reported ordering: UI laid out first, scene roots translated
+// during weapon rendering, overlay drawn afterward. Exercise the production
+// snapshot policy with fake canvas roots rather than fabricated Unity callbacks.
+var chatRoot = new TestOverlay { Position = new Vector3(960f, 540f, 0f), Overlay = true };
+var worldRoot = new TestOverlay { Position = new Vector3(20f, 3f, 40f), Overlay = false };
+var originGuard = new OriginShiftSnapshot<TestOverlay>(
+    node => !node.Destroyed && node.Overlay, node => node.Position,
+    (node, position) => { node.Position = position; node.Writes++; });
+foreach (Vector3 shift in new[] {
+    new Vector3(1024f, 0f, -128f), new Vector3(-4096f, 2048f, 512f),
+    new Vector3(65536f, -32768f, 131072f), new Vector3(-65536f, 32768f, -131072f) })
+{
+    Vector3 originalChat = chatRoot.Position, originalWorld = worldRoot.Position;
+    int writesBefore = chatRoot.Writes;
+    originGuard.Capture(chatRoot); originGuard.Capture(chatRoot); originGuard.Capture(worldRoot);
+    // Datum.originPosition moves with the scene roots. This is the recorded
+    // post-shift delta, rather than the opposite camera-position shift amount.
+    chatRoot.Position += shift; worldRoot.Position += shift;
+    Expect(originGuard.Restore(shift) == 1, true, "A shared overlay root is corrected once per shift");
+    Near((chatRoot.Position - originalChat).sqrMagnitude, 0f, "Chat remains at its pre-layout screen position");
+    Near((worldRoot.Position - (originalWorld + shift)).sqrMagnitude, 0f, "World-space UI follows the world normally");
+    Expect(chatRoot.Writes == writesBefore + 1, true, "Duplicate chat/feed references do not double-compensate a shared canvas");
+    Expect(originGuard.Restore(shift) == 0, true, "A completed shift cannot restore a stale snapshot again");
+}
+Vector3 smallShift = new(1024f, 0f, 128f);
+originGuard.Capture(chatRoot);
+Expect(originGuard.Restore(smallShift) == 0, true, "Unity already re-anchored this canvas; no second compensation");
+Vector3 movedByLayout = chatRoot.Position + Vector3.right * 30f;
+originGuard.Capture(chatRoot); chatRoot.Position = movedByLayout;
+Expect(originGuard.Restore(smallShift) == 0 && chatRoot.Position == movedByLayout, true,
+    "Independent UI layout changes are preserved");
+originGuard.Capture(chatRoot); chatRoot.Position += smallShift; chatRoot.Destroyed = true;
+Expect(originGuard.Restore(smallShift) == 0, true, "Destroyed chat roots are skipped during scene changes");
+chatRoot.Destroyed = false;
+originGuard.Capture(chatRoot);
+Expect(originGuard.Restore(Vector3.zero) == 0, true, "A native threshold/editor no-op leaves the UI untouched");
+chatRoot.Position += smallShift;
+Expect(originGuard.Restore(smallShift) == 0, true, "A no-op clears its snapshot instead of leaking it into a future shift");
+originGuard.Capture(chatRoot); chatRoot.Position += smallShift; chatRoot.Overlay = false;
+Expect(originGuard.Restore(smallShift) == 0, true, "A canvas switched to world-space is not pinned to the screen");
+chatRoot.Overlay = true;
+originGuard.Capture(chatRoot);
+Expect(originGuard.Restore(new Vector3(float.NaN, 0f, 0f)) == 0, true, "Invalid origin deltas cannot corrupt UI positions");
+foreach (float fov in new[] { 40f, 60f, 90f, 110f })
+foreach (float depth in new[] { 10f, 50f, 200f })
+{
+    Vector3 offset = new(3f, 0f, -depth);
+    Vector3 framed = AimViewFraming.LiftOffset(offset, Vector3.forward, Vector3.up, fov);
+    Near(framed.x, offset.x, "WT aim framing preserves lateral camera composition");
+    Near(framed.z, offset.z, "WT aim framing preserves camera depth/zoom");
+    float screenFraction = framed.y / depth / (2f * (float)Math.Tan(fov * Math.PI / 360f));
+    Near(screenFraction, 0.16f, "An Orbit camera keeps the aircraft below the WT aim marker across FoV/zoom");
+    Vector3 alreadyLow = new(3f, framed.y + 20f, -depth);
+    Near((AimViewFraming.LiftOffset(alreadyLow, Vector3.forward, Vector3.up, fov) - alreadyLow).sqrMagnitude, 0f,
+        "WT framing preserves an existing lower-aircraft cinematic composition");
+}
+// A held WT aim direction must not follow any later aircraft/base-rig rotation.
+// The frame accepts no aircraft-up vector and separates heading from horizon leveling.
+var mouseFrame = new MouseAimFrame();
+Vector3 heldAim = new Vector3(0.35f, 0.2f, 1f).normalized;
+mouseFrame.Advance(heldAim, heldAim, 8f, 1f / 60f);
+for (int angle = 0; angle <= 720; angle++)
+{
+    double radians = angle * Math.PI / 180f;
+    Vector3 changingBase = new((float)Math.Sin(radians), (float)Math.Sin(radians * 0.5), (float)Math.Cos(radians));
+    mouseFrame.Advance(heldAim, changingBase, 8f, 1f / 60f);
+    Near((mouseFrame.Forward - heldAim).sqrMagnitude, 0f, "A held world heading ignores later airframe/base-rig rotations");
+    Near(mouseFrame.Forward.sqrMagnitude, 1f, "Held aim frame stays normalized");
+    Near(Vector3.Dot(mouseFrame.Forward, mouseFrame.Up), 0f, "Held aim view remains orthogonal");
+    Expect(Vector3.Dot(mouseFrame.Up, Vector3.up) > 0.95f, true, "Aircraft bank cannot roll the normal WT horizon");
+    Near(mouseFrame.ReferenceUp.y, 1f, "WT free look uses world-up yaw away from the poles");
+}
+Vector3 preservedHeading = mouseFrame.Forward;
+Vector3 preservedUp = mouseFrame.Up;
+mouseFrame.Advance(Vector3.left, Vector3.back, 8f, 0f);
+Near((mouseFrame.Forward - preservedHeading).sqrMagnitude, 0f, "Paused WT frame does not change heading");
+Near((mouseFrame.Up - preservedUp).sqrMagnitude, 0f, "Paused WT frame does not change its horizon");
+mouseFrame.Advance(new Vector3(float.NaN, 0f, 1f), Vector3.back, 8f, 0.02f);
+Near((mouseFrame.Forward - preservedHeading).sqrMagnitude, 0f, "Invalid aim data cannot steer the camera");
+mouseFrame.Reset();
+mouseFrame.Advance(Vector3.forward, Vector3.forward, 8f, 0f);
+mouseFrame.Advance(Vector3.back, Vector3.zero, 8f, 1f / 60f);
+Expect(mouseFrame.Forward.x > 0f && mouseFrame.Forward.z < 1f, true, "An antipodal aim change starts a defined smooth turn");
+for (int i = 0; i < 240; i++) mouseFrame.Advance(Vector3.back, Vector3.zero, 8f, 1f / 60f);
+Near((mouseFrame.Forward - Vector3.back).sqrMagnitude, 0f, "Direction smoothing settles on a new world heading");
+mouseFrame.Reset();
+mouseFrame.Advance(Vector3.forward, Vector3.forward, 16f, 0f);
+for (int angle = 1; angle <= 720; angle++)
+{
+    double radians = angle * Math.PI / 180f;
+    Vector3 loopAim = new(0f, (float)Math.Sin(radians), (float)Math.Cos(radians));
+    Vector3 previousUp = mouseFrame.Up;
+    mouseFrame.Advance(loopAim, Vector3.right, 16f, 1f / 120f);
+    Near(mouseFrame.Forward.sqrMagnitude, 1f, "WT loop heading remains normalized through both poles");
+    Near(mouseFrame.Up.sqrMagnitude, 1f, "WT loop horizon remains normalized through both poles");
+    Near(Vector3.Dot(mouseFrame.Forward, mouseFrame.Up), 0f, "WT loop frame remains nondegenerate");
+    Expect(Vector3.Dot(previousUp, mouseFrame.Up) > 0.5f, true, "Pole transitions level without a single-frame horizon flip");
+}
+mouseFrame.Reset();
+mouseFrame.Advance(Vector3.up, Vector3.up, 8f, 0f);
+Near(Vector3.Dot(mouseFrame.Forward, mouseFrame.Up), 0f, "Entering WT camera directly vertical has a valid up vector");
+Near(mouseFrame.Up.sqrMagnitude, 1f, "Vertical entry produces a normalized camera frame");
+Console.WriteLine($"PASS: {checks} camera, orbit, world-aim frame, input, HUD and overlay-origin checks.");
 
 sealed class TestCanvas
 {
     internal bool Enabled, Destroyed;
+}
+
+sealed class TestOverlay
+{
+    internal Vector3 Position;
+    internal bool Overlay, Destroyed;
+    internal int Writes;
 }

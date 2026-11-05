@@ -10,10 +10,13 @@ The aim is a more familiar, customizable view of the action while keeping the ga
 
 - **Free look and target tracking:** toggle or hold to look around, follow your selected target, and smoothly recenter the camera.
 - **Two horizon styles:** switch between a camera that follows the aircraft's roll and one that keeps the horizon level.
+- **Orbit option:** upright, aircraft-centered framing following horizontal travel, with ArcadeCam's HUD, free look, recentering, target tracking and weapon camera. Choose the Orbit preset for a steady view without cinematic drift or added speed/pitch motion.
 - **Adjustable framing and motion:** change camera distance, height and zoom, with optional movement responding to speed, acceleration, airbraking and pitch maneuvers.
 - **Customizable HUD:** attach instruments, compass and waterline to the aircraft or camera, or hide them individually.
 - **Targeting screen in chase view:** display your aircraft's existing cockpit targeting-camera feed in a movable panel.
 - **Missile and bomb camera:** follow your latest launched weapon while retaining aircraft control, with explosion shake, a brief view of the damaged target or surviving wreckage when available, and a smooth return. The HUD can stay hidden throughout the sequence.
+- **Weapon-view audio:** listen from the weapon-camera viewpoint, with native spatial sounds, explosion propagation and supersonic audio checks, then return to aircraft audio.
+- **Optional WT Mouse Aim bridge:** experimental support for WT Mouse Aim 0.68.0, combining its mouse-flight instructor with ArcadeCam's camera and HUD. Enable WTMouseAimSupport under Compatibility; see the configuration guide for setup and testing limits.
 - **Configurable controls and settings:** bind actions through the game's Flight Controls menu and adjust settings through BepInEx Configuration Manager.
 
 ## Presets
@@ -24,6 +27,7 @@ The aim is a more familiar, customizable view of the action while keeping the ga
 | **AceCombat** | Closer framing, camera-fixed instruments, speed-related camera motion and strong centering after you release the look input. |
 | **AceCombat8** | The AceCombat setup with added pitch anticipation for more dynamic maneuver framing. |
 | **WarThunder** | Level horizon, camera-fixed instruments and free look without automatic centering or added speed/pitch motion. |
+| **Orbit** | Vanilla-style orbit framing with a level horizon, centered aircraft and camera-fixed instruments. Retains ArcadeCam controls and features, without cinematic drift or added speed/pitch motion. |
 | **Custom** | Save and return to your own edited setup. |
 
 These are inspired starting points, not exact recreations of those games. You can adjust them freely, and your edits persist across restarts.
@@ -67,8 +71,6 @@ See [configuration details](docs/CONFIGURATION.md), [building from source](docs/
 ## Credits
 
 ArcadeCam is a fork of **[ChaseCamPlus by CarloApri](https://github.com/CarloApri/NO-ChaseCamPlus)**, shared with the original developer's **explicit permission**. Thank you to CarloApri for the original mod and the foundation that made this project possible. The original MIT license and third-party credits are retained.
-
-This project is an unofficial community modification and is not affiliated with, sponsored by, or endorsed by Shockfront Studios Pty Ltd. Original Nuclear Option assets, vehicle designs, audio, and code are Copyright (c) 2026 Shockfront Studios Pty Ltd. All rights reserved. Nuclear Option and Shockfront Studios are trademarks or registered trademarks of Shockfront Studios Pty Ltd. Original mod content and all other trademarks belong to their respective owners.
 
 ## AI disclosure
 

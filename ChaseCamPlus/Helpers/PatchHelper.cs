@@ -14,6 +14,9 @@ public static class PatchHelper
     public static CameraMode EffectiveCameraMode()
     {
         CameraMode actual = CameraStateManager.cameraMode;
+        // WT captures raw mouse for aiming; never also accumulate those deltas
+        // into the native virtual joystick during the optional compatibility mode.
+        if (WtMouseAimCompatibility.OwnsChase()) return actual;
 
         if (!Plugin.VirtualJoystick.Value)
             return actual;

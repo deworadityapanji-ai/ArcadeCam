@@ -57,6 +57,7 @@ public class CameraChaseStatePatches
         ChaseViewReturn.Reset();
         ChaseCameraGeometry.Reset();
         ChaseCameraMotion.Reset();
+        MouseAimView.Reset();
         ChaseFreeLook.Reset();
         TargetingScreenOverlay.Hide();
         ChaseTargetLook.Reset();
@@ -167,6 +168,9 @@ public class CameraChaseStatePatches
         static bool Prefix(CameraStateManager cam)
         {
             WeaponCamera.BeforeCameraUpdate(cam);
+            if (WtMouseAimCompatibility.OwnsChase(cam) && _wasFreeLookActive
+                && !ChaseFreeLook.IsActive() && !WtMouseAimCompatibility.NativeFreeLookHeld)
+                ChaseViewReturn.Begin(cam);
             ChaseTargetLook.RestoreBasePose(cam);
             ChaseCameraGeometry.Restore(cam);
             return cam != null && cam.followingUnit != null;
@@ -185,11 +189,24 @@ public class CameraChaseStatePatches
             ChaseCameraGeometry.Capture(cam);
             float dt = Time.unscaledDeltaTime;
             bool inputAllowed = ChaseInput.IsAllowed(cam);
-            bool active = ChaseFreeLook.IsActive();
+            bool wtMouseAim = WtMouseAimCompatibility.OwnsChase(cam);
+            bool active = ChaseFreeLook.IsActive() || (wtMouseAim && WtMouseAimCompatibility.NativeFreeLookHeld);
             float panInput = inputAllowed ? GameManager.playerInput.GetAxis("Pan View") : 0f;
             float tiltInput = inputAllowed ? GameManager.playerInput.GetAxis("Tilt View") : 0f;
             var controller = GameManager.playerInput?.controllers.GetLastActiveController();
             bool usingStick = controller != null && controller.type == Rewired.ControllerType.Joystick;
+            // WT captures mouse input outside Rewired, so its raw deltas may
+            // leave Rewired's last-controller type at Joystick. A live look
+            // stick still wins; an idle stick must not block mouse free look.
+            float stickLookDeadzone = Mathf.Max(0.0001f, Plugin.CenteringDeadzone.Value);
+            bool stickLook = usingStick && (Mathf.Abs(panInput) >= stickLookDeadzone
+                || Mathf.Abs(tiltInput) >= stickLookDeadzone);
+            bool wtMouseLook = wtMouseAim && !stickLook;
+            if (wtMouseLook)
+            {
+                Vector2 step = WtMouseAimCompatibility.FreeLookStep();
+                panInput = step.x; tiltInput = step.y;
+            }
             float deadzone = usingStick ? Plugin.CenteringDeadzone.Value : 0.0001f;
             if (Mathf.Abs(panInput) < deadzone) panInput = 0f;
             if (Mathf.Abs(tiltInput) < deadzone) tiltInput = 0f;
@@ -238,7 +255,8 @@ public class CameraChaseStatePatches
             ChaseCameraGeometry.Apply(cam);
             ChaseCameraMotion.Apply(cam, movingLook || Mathf.Abs(_pan) > 1f || Mathf.Abs(_tilt) > 1f,
                 lookingAtTarget || ChaseTargetLook.IsTransitioning || ChaseViewReturn.IsActive);
-            Vector3 referenceUp = CinematicCamera.OrbitReferenceUp(cam);
+            MouseAimView.Apply(cam);
+            Vector3 referenceUp = wtMouseAim ? MouseAimView.ReferenceUp : CinematicCamera.OrbitReferenceUp(cam);
             Vector3 orbitUp = FreeLookAngles.YawAxis(cam.transform.forward, cam.transform.up, referenceUp);
             Vector3 baseForward = cam.transform.forward;
             float baseElevation = FreeLookAngles.Elevation(baseForward, orbitUp);
@@ -259,8 +277,8 @@ public class CameraChaseStatePatches
             {
                 float invert = PlayerSettings.viewInvertPitch ? -1f : 1f;
                 float sensitivity = PlayerSettings.viewSensitivity * Plugin.FreeLookSensitivity.Value;
-                _desiredPan += panInput * 120f * sensitivity * dt;
-                _desiredTilt += tiltInput * 120f * sensitivity * dt * invert;
+                _desiredPan += wtMouseLook ? panInput * Plugin.FreeLookSensitivity.Value : panInput * 120f * sensitivity * dt;
+                _desiredTilt += wtMouseLook ? tiltInput * Plugin.FreeLookSensitivity.Value : tiltInput * 120f * sensitivity * dt * invert;
                 _desiredPan = FreeLookAngles.Wrap(_desiredPan);
                 _desiredTilt = FreeLookAngles.ClampTilt(_desiredTilt, baseElevation);
                 if (centering == CenteringAction.Pull)
@@ -269,7 +287,7 @@ public class CameraChaseStatePatches
                     _desiredTilt = CameraCentering.Decay(_desiredTilt, Plugin.CenteringForce.Value, dt);
                 }
             }
-            else if (inputAllowed && !active && !Plugin.KeepFreeLookAngle.Value)
+            else if (inputAllowed && !active && (wtMouseAim || !Plugin.KeepFreeLookAngle.Value))
             {
                 _desiredPan = 0f;
                 _desiredTilt = 0f;

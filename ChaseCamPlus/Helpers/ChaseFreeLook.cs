@@ -17,7 +17,8 @@ internal static class ChaseFreeLook
     internal static void EnterChase()
     {
         Reset();
-        _armOnFirstAllowedInput = Plugin.FreeLookOnChaseEntry.Value && Plugin.ToggleFreeLook.Value;
+        _armOnFirstAllowedInput = Plugin.FreeLookOnChaseEntry.Value && Plugin.ToggleFreeLook.Value
+            && !WtMouseAimCompatibility.OwnsChase();
     }
 
     internal static void Poll() => IsActive();
@@ -29,7 +30,7 @@ internal static class ChaseFreeLook
         bool allowed = ChaseInput.IsAllowed(cam);
         if (_armOnFirstAllowedInput && allowed)
         {
-            State.Reset(Time.frameCount, true, Plugin.ToggleFreeLook.Value);
+            State.Reset(Time.frameCount, !WtMouseAimCompatibility.OwnsChase(cam), Plugin.ToggleFreeLook.Value);
             _armOnFirstAllowedInput = false;
         }
 

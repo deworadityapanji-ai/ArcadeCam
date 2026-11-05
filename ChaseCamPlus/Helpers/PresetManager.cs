@@ -91,6 +91,7 @@ internal static class PresetManager
         Plugin.ChaseViewByDefault.Value = true;
         Plugin.FreeLookOnChaseEntry.Value = true;
         Plugin.LevelHorizonByDefault.Value = p.LevelHorizon;
+        Plugin.LevelHorizonStyle.Value = p.LevelStyle;
         Plugin.ToggleFreeLook.Value = true;
         Plugin.KeepFreeLookAngle.Value = true;
         Plugin.CenteringEnabled.Value = p.Centering;

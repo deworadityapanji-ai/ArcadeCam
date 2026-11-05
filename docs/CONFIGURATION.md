@@ -4,8 +4,30 @@ Use BepInEx Configuration Manager to adjust these settings. See the main README 
 
 ## Settings
 
-**Chase Defaults:** choose chase when entering third person, free look on entry, and default level horizon.
+**Chase Defaults:** choose chase when entering third person, free look on entry, default level horizon,
+and LevelHorizonStyle (Cinematic or Orbit).
 Explicit choices in the game's camera picker are respected.
+
+### Orbit style (0.1.14)
+
+Choose **ArcadeCam > Preset > Orbit** to apply an orbit starting point, or set
+**Chase Defaults > LevelHorizonStyle = Orbit** and use the level horizon. Orbit stays upright,
+centers the aircraft and follows its horizontal travel direction. It retains the game's view smoothing
+but skips cinematic roll-arm movement, inertial drift, boom stretch and extra speed/pitch motion.
+Distance, height, zoom, free look, controller bindings, centering, target look, targeting feed,
+HUD layout, weapon camera and the 0.1.13 G-LOC correction remain available.
+
+The existing **ArcadeCam Horizon Toggle** switches between aircraft-relative chase and the selected
+level-horizon style. **LevelHorizonStyle = Cinematic** restores the original cinematic option.
+Changing the style while level horizon is active blends the base views and preserves manual viewing
+direction. Center View recenters on the new orbit course; continuous horizontal free look is retained.
+Orbit preset starts with no automatic centering, camera-attached left/right instruments and no extra
+speed/pitch motion. Independent compass, waterline, targeting-screen and weapon-camera preferences
+are preserved. Existing presets keep their original style; Custom saves/restores the new selection.
+Existing installations default to Cinematic until Orbit is selected. The native camera picker still
+offers the game's unmodified Orbit view; choose ArcadeCam's Orbit preset to get its added features.
+
+### Other settings
 
 **Chase Free Look:** ToggleFreeLook selects toggle/hold. KeepFreeLookAngle holds the viewing angle when
 free look ends. CenteringEnabled is an independent switch; Centering Force sets strength from 0 to 1.
@@ -112,6 +134,9 @@ past the 3D rendering callbacks; nested canvases are included. No HUD GameObject
 gauge updates or saved aircraft HUD choices are disabled. The targeting-screen panel is hidden during weapon view. Turning HideHud
 off retains the aircraft HUD and its aircraft readings, rather than creating a missile-aiming HUD.
 Camera switching, menus/map, aircraft loss/ejection and disabling the feature cancel immediately.
+From 0.1.15, the multiplayer chat/feed stays visible with its screen-space canvas protected from
+world-origin shifts while following your own aircraft in ArcadeCam chase, including weapon view.
+This is independent of WeaponCameraHideHud. Chat input, message contents and native expiry are preserved.
 Standard mounted missiles/bombs and launcher missiles use the native registration path; gun bullets,
 saved spectator missiles and arbitrary cluster submunitions are not selected. Both host/client use
 the executed native detonation callback; a missing callback disables the optional impact view only.
@@ -120,3 +145,58 @@ require in-game testing. No additional key assignments are made automatically.
 **Virtual Joystick / Other:** preserve mouse steering in chase, adjust free-look sensitivity, enable
 manual turret aiming, fix external-view weapon FoV, and retain outside-cockpit hit confirmation sound.
 These original ChaseCamPlus features remain available. A hidden joystick indicator does not disable steering.
+
+## WT Mouse Aim compatibility (0.1.16, experimental)
+
+Install WT Mouse Aim **0.68.0** separately, then enable **ArcadeCam > Compatibility > WTMouseAimSupport**.
+In WT Mouse Aim, enable **General > Enabled**, **Control > WriteControl**, and **Camera > CameraFollow**.
+Enter ArcadeCam chase using its binding or the normal third-person switch with ChaseViewByDefault enabled.
+The compatibility switch defaults off to preserve controller setups. It can be changed in Configuration
+Manager without editing WT's files. Other WT versions are left unsupported with a diagnostic until validated.
+
+WT owns mouse capture and its flight instructor; ArcadeCam owns the chase composition, HUD and weapon view.
+Both level-horizon styles and aircraft-relative chase remain available. WT's OrbitAimSmoothing controls
+aim-view responsiveness. The adapter does not change the game's global camera mode or modify WT's flight law.
+From 0.1.17, the WT aim view stays horizon-stabilized even with an aircraft-relative preset such as AceCombat.
+Aircraft bank cannot roll its aiming/free-look frame. Heading smoothing is independent of horizon leveling;
+near vertical flight transports the view's up axis continuously before easing back to the level horizon.
+Presets still select underlying framing and motion. The ordinary controller view retains its usual horizon
+behavior when WT compatibility is off. WT target look also uses a world-up reference.
+Aim-view framing keeps the aircraft below the reticle instead of allowing the centered Orbit composition
+to obscure it. Existing lower-aircraft compositions are retained; zoom and lateral framing remain adjustable.
+
+Chase starts in aiming mode while the adapter is active. Use ArcadeCam Free Look (toggle/hold), the game's
+Free Look binding, or WT's configured right-mouse freeze to look around while freezing the aim marker.
+Mouse free look uses WT's smoothed raw delta, sensitivity and inversion, with ArcadeCam's FreeLookSensitivity
+multiplier. A live controller look stick retains the normal Rewired path. Releasing free look returns toward
+the aim using ArcadeCam's TargetReturnSeconds; selected-target look also freezes the aim until its return ends.
+During weapon view the marker stays frozen while aircraft flight/manual overrides remain WT's responsibility.
+
+WT's flight overlay respects WeaponCameraHideHud; its pre-overlay recording/master-switch indicators stay
+native. WT's additional full-screen G-LOC fade is suppressed only in the supported ArcadeCam chase context,
+where the native G-LOC warning already runs. Cockpit and native Orbit keep WT's original camera behavior.
+Neither WT's DLL nor its saved settings are rewritten. There is no hard assembly dependency when it is absent.
+Actual mouse/controller handoffs, loops, menus and recording behavior still require in-game verification.
+
+## Weapon-view audio (0.1.16)
+
+**Weapon Camera > WeaponCameraFollowAudio** defaults on. A separate temporary listener follows the finalized
+weapon/impact/wreckage/return viewpoint for the entire audio frame. The original listener is disabled first,
+then restored when weapon view ends. Native explosion distance/propagation and supersonic-sound position and
+relative-velocity checks use that same audio viewpoint. Camera-only aircraft wind/rattle are temporarily muted;
+their previous mute states return afterward. UI/radio channels and global volume/mixer choices are preserved.
+
+The feature reuses native sound sources; it adds no explosion recordings, forced replay or volume boost.
+The simulation camera, aircraft ownership and weapon damage stay intact. Multiple/no active listener contexts
+fall back to native audio with a warning. Turn WeaponCameraFollowAudio off to retain the previous audio behavior.
+Audio perception, Doppler and cancellation/scene-change recovery still require gameplay testing.
+
+## G-LOC in chase view
+
+From 0.1.13, chase view while following your own aircraft uses the game's native G-LOC warning:
+gradual darkening, loss of colour, tightening vignette and muffled audio before full blackout.
+This follows the pilot's simulated condition, including recovery, rather than an independent camera timer.
+The game's G tolerance, loss of flight control and unconsciousness duration are preserved.
+It applies in both chase horizon styles and is independent of HUD visibility and camera presets.
+Cockpit behavior and spectator camera behavior remain native. Camera switching resets the presentation
+when leaving supported views. No new binding or configuration change is required.

@@ -6,6 +6,7 @@
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameDir)/NuclearOption_Data/Managed/UnityEngine.CoreModule.dll</HintPath></Reference>
     <Compile Include="../../ChaseCamPlus/Helpers/PresetManager.cs" Link="PresetManager.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/CameraPreset.cs" Link="CameraPreset.cs" />
+    <Compile Include="../../ChaseCamPlus/Helpers/LevelCameraStyle.cs" Link="LevelCameraStyle.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/CenteringBehavior.cs" Link="CenteringBehavior.cs" />
     <Compile Include="../../ChaseCamPlus/Helpers/HudAttachment.cs" Link="HudAttachment.cs" />
   </ItemGroup>

@@ -9,6 +9,7 @@ internal static class ChaseCameraMotion
 
     internal static void Apply(CameraStateManager cam, bool manualLook, bool tracking)
     {
+        if (CinematicCamera.UsesOrbit) { State.Reset(); return; }
         if (cam.followingRB == null) return;
         Transform aircraft = cam.followingUnit.transform;
         float pitchUpRate = -Vector3.Dot(cam.followingRB.angularVelocity, aircraft.right) * Mathf.Rad2Deg;
