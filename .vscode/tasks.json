@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Mod: Build",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "RemoteSigned",
+        "-File",
+        "${workspaceFolder}/scripts/build.ps1"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Mod: Check environment",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "RemoteSigned",
+        "-File",
+        "${workspaceFolder}/scripts/check-environment.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mod: Install C# and decompiler tools",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "RemoteSigned",
+        "-File",
+        "${workspaceFolder}/scripts/setup-tools.ps1"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Mod: Install test build (close game first)",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "RemoteSigned",
+        "-File",
+        "${workspaceFolder}/scripts/install-mod.ps1"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

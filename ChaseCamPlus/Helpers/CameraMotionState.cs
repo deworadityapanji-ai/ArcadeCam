@@ -48,7 +48,7 @@ internal sealed class CameraMotionState
 
     // Exact critically damped spring for a constant target over this frame. Velocity
     // remains continuous when input changes, unlike directly lerping to a rate sample.
-    private static float Spring(float current, float target, ref float velocity, float response, float dt)
+    internal static float Spring(float current, float target, ref float velocity, float response, float dt)
     {
         if (response <= 0f) { velocity = 0f; return target; }
         float omega = 2f / Math.Max(response, 0.01f);

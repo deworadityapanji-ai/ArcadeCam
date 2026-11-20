@@ -1,6 +1,6 @@
 # ArcadeCam
 
-**A camera and HUD mod for Nuclear Option, built around controller play and inspired by arcade flight games.**
+**A camera mod for Nuclear Option, built around controller play and inspired by arcade flight games.** The HUD now lives in its own mod, [UI Plus](https://github.com/deworadityapanji-ai/UIPlus); the two work together or on their own.
 
 ArcadeCam started as a personal project because I couldn't find a mod that quite matched the camera feel I wanted. It gradually grew into something I wanted to share with other players coming from arcade flight games and getting used to Nuclear Option's more advanced simcade flying.
 
@@ -10,13 +10,13 @@ The aim is a more familiar, customizable view of the action while keeping the ga
 
 - **Free look and target tracking:** toggle or hold to look around, follow your selected target, and smoothly recenter the camera.
 - **Two horizon styles:** switch between a camera that follows the aircraft's roll and one that keeps the horizon level.
-- **Orbit option:** upright, aircraft-centered framing following horizontal travel, with ArcadeCam's HUD, free look, recentering, target tracking and weapon camera. Choose the Orbit preset for a steady view without cinematic drift or added speed/pitch motion.
+- **Orbit option:** upright, aircraft-centered framing following horizontal travel, with free look, recentering, target tracking and weapon camera. Choose the Orbit preset for a steady view without cinematic drift or added speed/pitch motion.
 - **Adjustable framing and motion:** change camera distance, height and zoom, with optional movement responding to speed, acceleration, airbraking and pitch maneuvers.
-- **Customizable HUD:** attach instruments, compass and waterline to the aircraft or camera, or hide them individually.
+- **HUD moved to UI Plus:** the HUD in chase view, instrument placement, HUD styles, the layout editor and the targeting screen are now in [UI Plus](https://github.com/deworadityapanji-ai/UIPlus). With both installed, UI Plus also shows ArcadeCam's HIT / MISS / DESTROYED callouts and hides the targeting screen during the weapon camera.
 - **Targeting screen in chase view:** display your aircraft's existing cockpit targeting-camera feed in a movable panel.
 - **Missile and bomb camera:** follow your latest launched weapon while retaining aircraft control, with explosion shake, a brief view of the damaged target or surviving wreckage when available, and a smooth return. The HUD can stay hidden throughout the sequence.
 - **Weapon-view audio:** listen from the weapon-camera viewpoint, with native spatial sounds, explosion propagation and supersonic audio checks, then return to aircraft audio.
-- **Optional WT Mouse Aim bridge:** experimental support for WT Mouse Aim 0.68.0, combining its mouse-flight instructor with ArcadeCam's camera and HUD. Enable WTMouseAimSupport under Compatibility; see the configuration guide for setup and testing limits.
+- **Optional WT Mouse Aim bridge:** experimental support for WT Mouse Aim 0.68.0, combining its mouse-flight instructor with ArcadeCam's camera. Enable WTMouseAimSupport under Compatibility; see the configuration guide for setup and testing limits.
 - **Configurable controls and settings:** bind actions through the game's Flight Controls menu and adjust settings through BepInEx Configuration Manager.
 
 ## Presets

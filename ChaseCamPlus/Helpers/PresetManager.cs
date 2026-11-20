@@ -112,11 +112,5 @@ internal static class PresetManager
         Plugin.PitchFollowStrength.Value = 0.12f;
         Plugin.PitchFollowLimit.Value = 8f;
         Plugin.MotionResponse.Value = 0.25f;
-        Plugin.FlightHud.Value = true;
-        Plugin.Map.Value = true;
-        Plugin.LeftInstruments.Value = p.Instruments;
-        Plugin.RightInstruments.Value = p.Instruments;
-        Plugin.PitchLadder.Value = false;
-        Plugin.VirtualJoystickIndicator.Value = false;
     }
 }

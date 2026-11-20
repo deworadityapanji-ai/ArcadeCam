@@ -35,10 +35,14 @@ function Assert-ModReferences {
         'NuclearOption_Data\Managed\UnityEngine.CoreModule.dll',
         'NuclearOption_Data\Managed\UnityEngine.PhysicsModule.dll',
         'NuclearOption_Data\Managed\UnityEngine.AudioModule.dll',
+        'NuclearOption_Data\Managed\UnityEngine.UnityWebRequestModule.dll',
+        'NuclearOption_Data\Managed\UnityEngine.UnityWebRequestAudioModule.dll',
         'NuclearOption_Data\Managed\UnityEngine.InputLegacyModule.dll',
         'NuclearOption_Data\Managed\UnityEngine.UIModule.dll',
         'NuclearOption_Data\Managed\UnityEngine.IMGUIModule.dll',
         'NuclearOption_Data\Managed\UnityEngine.UI.dll',
+        'NuclearOption_Data\Managed\Unity.TextMeshPro.dll',
+        'NuclearOption_Data\Managed\UnityEngine.TextRenderingModule.dll',
         'BepInEx\core\BepInEx.dll'
     )
     foreach ($relativePath in $required) {

@@ -68,6 +68,24 @@ ArcadeCam's independently implemented compatibility adapter targets its 0.68.0 a
 API and adapts camera-context/overlay checks at runtime. Its flight-controller code, original camera
 patches, DLL and configuration files are not bundled or replaced. Users install WT Mouse Aim separately.
 
+### Optional Ace Combat Style Reloads and KaceyTronic RWR interoperability
+
+[Ace Combat Style Reloads](https://github.com/Dandy-Yak/Ace-Combat-Style-Reloads-For-Nuclear-Option),
+by Dandy-Yak, and [KaceyTronic RWR](https://github.com/KcTries/KaceyTronic-RWR), by KcTries, are optional
+separate mods. ArcadeCam's Arcade HUD reads the reload mod's reserve and reload-progress state, and moves,
+recolours and restyles the RWR's scope and alert panel, at runtime through reflection. Both authors gave
+permission for this compatibility work. Neither mod's code, DLL, assets or configuration files are bundled
+or replaced; users install them separately.
+
+### Optional WSO Yappinator interoperability
+
+[WSO Yappinator](https://github.com/nikkorap/NO-WSO-Yappinator), by nikkorap (who also created its voice
+packs), is an optional separate mod; neutralobserver maintains a fork that keeps it working on later game
+versions. When it plays a voice line, ArcadeCam observes the playback through a Harmony postfix and shows the
+matching line from the voice pack's `*_dialogue.txt` file as a subtitle. nikkorap gave permission for this
+compatibility work. No code from the mod or its fork is used, and Yappinator's DLL, audio and configuration
+files are not bundled, replaced or modified; users install it separately.
+
 ### Referenced build dependencies
 
 Not redistributed — referenced at build time and expected to be present at runtime.

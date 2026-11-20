@@ -23,6 +23,9 @@ internal sealed class WeaponImpactEvidence
         Confirm();
     }
 
+    /// <summary>Kill cam: the game has already confirmed the kill, no blast evidence needed.</summary>
+    internal void Force() => Confirmed = true;
+
     internal void Detonate(float time, bool nearby)
     {
         if (_detonated) return;
@@ -34,6 +37,39 @@ internal sealed class WeaponImpactEvidence
     {
         float delay = _damageTime - _detonationTime;
         if (_detonated && _nearby && delay >= -0.12f && delay <= 0.45f) Confirmed = true;
+    }
+}
+
+/// <summary>
+/// Kill cam wreck view: a front-quarter camera that stays ahead of the falling wreck, off to one
+/// side and a little above, looking back at it, so the wreck and its smoke trail stream toward
+/// and past the view. Carries the wreck's full movement so it cannot fall behind.
+/// </summary>
+internal sealed class WeaponKillViewMotion
+{
+    private Vector3 _direction, _offset;
+    private float _side = 1f;
+    private bool _started;
+
+    internal void Reset() => _started = false;
+
+    /// <param name="fallback">Direction to use while the wreck is nearly still.</param>
+    /// <param name="sideHint">Which side of the wreck to sit on (the player's side).</param>
+    internal Vector3 Advance(Vector3 point, Vector3 velocity, float radius, Vector3 fallback, Vector3 sideHint, float dt)
+    {
+        Vector3 wanted = velocity.sqrMagnitude > 25f ? velocity.normalized
+            : _started ? _direction : (fallback.sqrMagnitude > 0.0001f ? fallback.normalized : Vector3.forward);
+        float turn = !_started ? 1f : 1f - (float)Math.Exp(-Math.Max(0f, dt) / 0.6f);
+        _direction = (_started ? Vector3.Slerp(_direction, wanted, turn) : wanted).normalized;
+        Vector3 side = Vector3.Cross(Vector3.up, _direction);
+        if (side.sqrMagnitude < 0.0001f) side = Vector3.Cross(Vector3.forward, _direction);
+        side.Normalize();
+        if (!_started) _side = Vector3.Dot(side, sideHint) >= 0f ? 1f : -1f;
+        float distance = Math.Max(18f, Math.Min(140f, Math.Max(0f, radius) * 3f + 10f));
+        Vector3 target = (_direction * 0.8f + side * (0.45f * _side) + Vector3.up * 0.3f).normalized * distance;
+        _offset = !_started ? target : Vector3.Lerp(_offset, target, 1f - (float)Math.Exp(-Math.Max(0f, dt) / 0.35f));
+        _started = true;
+        return point + _offset;
     }
 }
 

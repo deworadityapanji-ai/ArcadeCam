@@ -57,9 +57,10 @@ public class CameraChaseStatePatches
         ChaseViewReturn.Reset();
         ChaseCameraGeometry.Reset();
         ChaseCameraMotion.Reset();
+        DynamicChaseCamera.Reset();
+        ChasePivotSmoothing.Reset();
         MouseAimView.Reset();
         ChaseFreeLook.Reset();
-        TargetingScreenOverlay.Hide();
         ChaseTargetLook.Reset();
     }
 
@@ -98,8 +99,6 @@ public class CameraChaseStatePatches
         static Exception Finalizer(Exception __exception, CameraStateManager cam)
         {
             ResetOrbit();
-            UpdateState.ShowMapWidgets(show: true);
-            UpdateState.ApplyElementOverrides(inChase: false);
 
             if (__exception is NullReferenceException && cam != null && cam.followingUnit == null)
             {
@@ -119,27 +118,6 @@ public class CameraChaseStatePatches
         }
 
         private static bool _reportedLeaveStateBug;
-    }
-
-    /// <summary>
-    /// Vanilla hides the flight HUD in chase view. <c>EnterState</c> clears <c>showHUD</c>, and
-    /// <c>CheckHUD</c> short-circuits on it before ever reaching the branch that would turn the HUD
-    /// on; the only thing that sets the flag back is <c>ToggleHUD</c>, reachable solely through a
-    /// debug key gated on <c>GameState.Editor</c>. So in an ordinary match third person means no
-    /// instruments and no virtual joystick indicator.
-    ///
-    /// Setting the flag before the method runs hands the decision back to the game's own logic
-    /// rather than forcing the canvas on: the HUD appears in the positions it was written for
-    /// (Back, Tail, wing roots, Belly) and stays off in the ones where an overlay would be nonsense.
-    /// </summary>
-    [HarmonyPatch(typeof(CameraChaseState), nameof(CameraChaseState.CheckHUD))]
-    static class CheckHUD
-    {
-        static void Prefix(ref bool ___showHUD)
-        {
-            if (Plugin.FlightHud.Value)
-                ___showHUD = true;
-        }
     }
 
     /// <summary>
@@ -177,14 +155,17 @@ public class CameraChaseStatePatches
         }
 
         static void Postfix(CameraStateManager cam, float ___viewDistAdjust,
-            Vector3 ___posVector, Vector3 ___targetVector, Quaternion ___cameraCustomRotation)
+            Vector3 ___posVector, Vector3 ___targetVector, Quaternion ___cameraCustomRotation,
+            ref Quaternion ___cameraRotationPrev)
         {
             if (cam == null || cam.currentState != cam.chaseState)
                 return;
 
-            EnforceHudVisibility();
             if (cam.cameraPivot == null || cam.followingUnit == null)
                 return;
+
+            // Frame-rate independent replacement for the game's pivot rotation smoothing.
+            ChasePivotSmoothing.Apply(cam, ___targetVector, ref ___cameraRotationPrev);
 
             ChaseCameraGeometry.Capture(cam);
             float dt = Time.unscaledDeltaTime;
@@ -254,6 +235,12 @@ public class CameraChaseStatePatches
 
             ChaseCameraGeometry.Apply(cam);
             ChaseCameraMotion.Apply(cam, movingLook || Mathf.Abs(_pan) > 1f || Mathf.Abs(_tilt) > 1f,
+                lookingAtTarget || ChaseTargetLook.IsTransitioning || ChaseViewReturn.IsActive);
+            // Leans the camera into manoeuvres. Free look keeps it: the orbit below swings the
+            // already-moved camera, so a held look angle still feels the aircraft's motion. Target
+            // look and the return from it re-aim the camera, so those pause it. With WT Mouse Aim,
+            // WT's aim view keeps this offset because it preserves the camera's relative framing.
+            DynamicChaseCamera.Apply(cam,
                 lookingAtTarget || ChaseTargetLook.IsTransitioning || ChaseViewReturn.IsActive);
             MouseAimView.Apply(cam);
             Vector3 referenceUp = wtMouseAim ? MouseAimView.ReferenceUp : CinematicCamera.OrbitReferenceUp(cam);
@@ -328,212 +315,6 @@ public class CameraChaseStatePatches
             ChaseTargetLook.Apply(cam, lookingAtTarget, targetPosition);
             ChaseViewReturn.Apply(cam);
         }
-        /// <summary>
-        /// Keeps the HUD in the state the config asks for, checked every frame instead of once on
-        /// entry.
-        ///
-        /// Setting <c>showHUD</c> in <c>CheckHUD</c> is not enough on its own, because that method
-        /// only runs when the chase state is entered, while plenty of other code turns the HUD off
-        /// afterwards and turns it back on under a cockpit-only condition. Pausing runs
-        /// <c>FlightHud.EnableCanvas(false)</c> unconditionally, and the resume path only restores
-        /// it <c>if (currentState == cockpitState)</c>. Worse, <c>SwitchState</c> calls
-        /// <c>DynamicMap.Minimize()</c> immediately *after* <c>EnterState</c>, and that method ends
-        /// with <c>EnableCanvas(aircraft != null &amp;&amp; cameraMode == cockpit)</c> — so the map is
-        /// switched off a moment after entering chase had switched it on.
-        ///
-        /// Rather than chase every one of those paths, and every new one a game update might add,
-        /// this repairs the state whenever it finds it wrong. <c>EnableCanvas</c> drags a
-        /// <c>RefreshSettings()</c> across five singletons behind it, so it is only called when
-        /// something actually needs changing, never once per frame.
-        /// </summary>
-        private static void EnforceHudVisibility()
-        {
-            FlightHud hud = SceneSingleton<FlightHud>.i;
-            bool hudActive = hud != null && FlightHudCanvasActive(hud);
-
-            // One set of settings covers both chase cameras. They differ in where they point, not
-            // in what the HUD is drawn on, and someone who wants instruments in third person wants
-            // them in third person.
-            if (!Plugin.FlightHud.Value)
-            {
-                // Vanilla already leaves the HUD off in chase, so there is normally nothing to do —
-                // but the mode can be switched on with the HUD already up, and then it has to come
-                // down. Only the canvas is touched: the minimap furniture lives under it and goes
-                // with it, and its own state is left alone so it returns as the config asks.
-                if (hudActive)
-                    FlightHud.EnableCanvas(enable: false);
-
-                return;
-            }
-
-            if (DynamicMap.mapMaximized)
-            {
-                // Opening the map full screen hides the flight HUD so it is not painted over the
-                // map — but `Maximize()` only does that `if (currentState == cockpitState)`. In
-                // chase that branch never runs, so the HUD stays up: a translucent grey overlay with
-                // the green velocity vector sitting on top of the map. Do what the cockpit does.
-                if (hudActive)
-                    FlightHud.EnableCanvas(enable: false);
-
-                // The player asked for the map, so put its widgets back whatever MapInChase says —
-                // that flag is about the minimap in chase, not about a map opened deliberately.
-                ShowMapWidgets(true);
-                return;
-            }
-
-            if (hud != null && !hudActive)
-                FlightHud.EnableCanvas(enable: true);
-
-            ShowMapWidgets(Plugin.Map.Value);
-            ApplyElementOverrides(inChase: true);
-        }
-
-        /// <summary>
-        /// Shows or hides the minimap and the chrome drawn around it.
-        ///
-        /// Switching off the <c>DynamicMap</c> object alone leaves the widget's furniture behind: a
-        /// dark plate in the lower left with a small forward-reference marker on it, both of which
-        /// live outside that object. The plate is the <c>Image</c> on the panel two levels up, and
-        /// the marker is a sibling of the map under the anchor between them — so hiding the anchor
-        /// takes the marker and the map together, and disabling just that one Image takes the plate.
-        ///
-        /// The panel itself has to stay active: it also carries the threat list, and switching it
-        /// off would cost the player their missile warnings to tidy up an empty frame.
-        ///
-        /// Objects are reached by walking up from the map rather than by name, so this survives a
-        /// renamed hierarchy as long as the shape of it holds.
-        /// </summary>
-        internal static void ShowMapWidgets(bool show)
-        {
-            DynamicMap map = SceneSingleton<DynamicMap>.i;
-            if (map == null)
-                return;
-
-            Transform anchor = map.transform.parent;
-            Transform panel = anchor != null ? anchor.parent : null;
-
-            if (anchor != null && anchor.gameObject.activeSelf != show)
-                anchor.gameObject.SetActive(show);
-
-            if (show && !map.gameObject.activeSelf)
-                DynamicMap.EnableCanvas(enable: true);
-
-            SetPlateVisible(panel, show);
-        }
-
-        /// <summary>
-        /// Toggles the panel's own Image without touching its children. Matched on type name and
-        /// handled as a <see cref="Behaviour"/> so this does not need a reference to the UI assembly
-        /// for a single <c>enabled</c> flag.
-        /// </summary>
-        private static void SetPlateVisible(Transform panel, bool show)
-        {
-            if (panel == null)
-                return;
-
-            foreach (Component component in panel.GetComponents<Component>())
-            {
-                if (component is Behaviour behaviour
-                    && component.GetType().Name == "Image"
-                    && behaviour.enabled != show)
-                {
-                    behaviour.enabled = show;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Applies the per-element chase overrides, and clears them again when leaving chase so the
-        /// cockpit never inherits a setting that was only ever about third person.
-        ///
-        /// Note what these two cannot do: the pitch ladder's rungs and its horizon line are one
-        /// scrolling texture — the game moves a single <c>RawImage</c>'s uvRect with pitch — so
-        /// hiding the ladder takes the horizon line with it. Separating them would mean replacing
-        /// the texture, not toggling an object.
-        /// </summary>
-        internal static void ApplyElementOverrides(bool inChase)
-        {
-            FlightHud hud = SceneSingleton<FlightHud>.i;
-            if (hud == null)
-                return;
-
-            bool showLadder = !inChase || Plugin.PitchLadder.Value;
-            if (Field(ref _pitchLadderField, "pitchCompassCenter")?.GetValue(hud) is GameObject ladder
-                && ladder.activeSelf != showLadder)
-            {
-                ladder.SetActive(showLadder);
-            }
-
-            // The weapon HUD states switch the waterline back on whenever the selected weapon
-            // changes, so this is re-applied every frame rather than set once.
-            bool showWaterline = !inChase || Plugin.Waterline.Value != HudAttachment.Hidden;
-            if (Field(ref _waterlineField, "waterline")?.GetValue(hud) is Behaviour waterline
-                && waterline.enabled != showWaterline)
-            {
-                waterline.enabled = showWaterline;
-            }
-
-            // Only the Image is switched off, never the GameObject. PlayerAxisControls keeps the
-            // virtual joystick's deflection in virtualJoystickPos.transform.localPosition and reads
-            // pitch, roll and yaw straight back out of it, so deactivating the object would take the
-            // stick away along with its indicator. The game drives the same object through SetActive
-            // and its colour and never touches enabled, so there is nothing here to fight over.
-            //
-            // Reached by reflection and held as Behaviour rather than Image, like the waterline
-            // above: the mod does not reference UnityEngine.UI, and enabled is all it needs.
-            bool showStick = !inChase || Plugin.VirtualJoystickIndicator.Value;
-            if (Field(ref _joystickPosField, "virtualJoystickPos")?.GetValue(hud) is Behaviour knob
-                && knob.enabled != showStick)
-            {
-                knob.enabled = showStick;
-            }
-
-            if (Field(ref _joystickVectorField, "virtualJoystickVector")?.GetValue(hud) is Behaviour vector
-                && vector.enabled != showStick)
-            {
-                vector.enabled = showStick;
-            }
-
-            // The instrument groups are whole objects rather than fields on the HUD, and which ones
-            // exist depends on the airframe, so they are resolved by component type rather than named
-            // here. See HudElements.
-            if (inChase)
-            {
-                HudElements.Apply(
-                    Plugin.LeftInstruments.Value,
-                    Plugin.RightInstruments.Value,
-                    Plugin.Compass.Value);
-            }
-            else
-            {
-                HudElements.ShowAll();
-            }
-        }
-
-        private static FieldInfo _pitchLadderField;
-        private static FieldInfo _waterlineField;
-        private static FieldInfo _joystickPosField;
-        private static FieldInfo _joystickVectorField;
-
-        private static FieldInfo Field(ref FieldInfo cache, string name) =>
-            cache ??= AccessTools.Field(typeof(FlightHud), name);
-
-        // FlightHud.canvas is private, and there is no public way to ask whether the HUD is showing.
-        private static FieldInfo _canvasField;
-
-        private static bool FlightHudCanvasActive(FlightHud hud)
-        {
-            _canvasField ??= AccessTools.Field(typeof(FlightHud), "canvas");
-
-            // Typed as Component rather than Canvas: only the GameObject is needed, and naming
-            // Canvas would drag in a reference to UnityEngine.UIModule for nothing.
-            if (_canvasField?.GetValue(hud) is Component canvas)
-                return canvas.gameObject.activeSelf;
-
-            // Cannot tell — assume it is fine rather than hammer EnableCanvas every frame.
-            return true;
-        }
-
         /// <summary>
         /// Orbiting can swing the camera through the ground. This repeats the collision pull-in the
         /// chase state does for its own placement, using the same cast and the same layer mask.

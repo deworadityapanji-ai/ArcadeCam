@@ -45,6 +45,20 @@ public class Plugin : BaseUnityPlugin
     public static ConfigEntry<float> PitchFollowStrength;
     public static ConfigEntry<float> PitchFollowLimit;
     public static ConfigEntry<float> MotionResponse;
+    public static ConfigEntry<bool> DynamicChaseEnabled;
+    public static ConfigEntry<bool> FrameRateIndependentChase;
+    public static ConfigEntry<KillCamFrequency> KillCamFrequency;
+    public static ConfigEntry<bool> KillCamIncludeGround;
+    public static ConfigEntry<bool> KillCamOnMissileHit;
+    public static ConfigEntry<KillCamView> KillCamView;
+    public static ConfigEntry<float> KillCamSeconds;
+    public static ConfigEntry<float> KillCamSlowMotion;
+    public static ConfigEntry<bool> KillCamSound;
+    public static ConfigEntry<float> KillCamSoundVolume;
+    public static ConfigEntry<float> DynamicChaseStrength;
+    public static ConfigEntry<float> DynamicChaseRollLag;
+    public static ConfigEntry<float> DynamicChaseDeadzone;
+    public static ConfigEntry<float> DynamicChaseResponse;
     public static ConfigEntry<bool> WeaponCameraEnabled;
     public static ConfigEntry<bool> WeaponCameraToggle;
     public static ConfigEntry<bool> WeaponCameraCinematic;
@@ -58,23 +72,13 @@ public class Plugin : BaseUnityPlugin
     public static ConfigEntry<bool> WeaponCameraHideHud;
     public static ConfigEntry<bool> WeaponCameraFollowAudio;
     public static ConfigEntry<bool> VirtualJoystick;
-    public static ConfigEntry<bool> TargetingScreenEnabled;
-    public static ConfigEntry<float> TargetingScreenXPercent;
-    public static ConfigEntry<float> TargetingScreenYPercent;
-    public static ConfigEntry<float> TargetingScreenWidthPercent;
 
     // Stated as what you see, not as what is taken away. An option list that mixes "hide this" with
     // "keep that" makes the reader work out which way each true points; every one of these is on
     // when the thing is on screen.
-    public static ConfigEntry<bool> FlightHud;
-    public static ConfigEntry<bool> Map;
+    // The HUD settings (flight HUD in chase, map, instruments, targeting screen, layouts) moved to
+    // the UI Plus mod, which imports them from this config on its first run.
     public static ConfigEntry<bool> TurretAim;
-    public static ConfigEntry<bool> PitchLadder;
-    public static ConfigEntry<HudAttachment> Waterline;
-    public static ConfigEntry<HudAttachment> LeftInstruments;
-    public static ConfigEntry<HudAttachment> RightInstruments;
-    public static ConfigEntry<HudAttachment> Compass;
-    public static ConfigEntry<bool> VirtualJoystickIndicator;
 
     public static ConfigEntry<bool> ChaseViewByDefault;
     public static ConfigEntry<bool> FreeLookOnChaseEntry;
@@ -146,6 +150,35 @@ public class Plugin : BaseUnityPlugin
             new ConfigDescription("Maximum pitch anticipation in degrees.", new AcceptableValueRange<float>(0f, 20f)));
         MotionResponse = Config.Bind("Camera Motion", "MotionResponse", 0.25f,
             new ConfigDescription("Smoothing time for boom motion and pitch anticipation, in seconds. Higher softens changes; aircraft roll remains immediate.", new AcceptableValueRange<float>(0.05f, 1f)));
+        KillCamFrequency = Config.Bind("Kill Cam", "KillCamFrequency", Helpers.KillCamFrequency.Rare,
+            "How often a kill plays the kill cam (the chase camera turns to watch the wreck, with slow motion in single player). Notable kills are likelier: gun kills, big or valuable targets, close kills, multi-kills; a carrier is near guaranteed. Always plays it for every aircraft/ship kill (handy for testing). Never plays with a missile inbound, near the ground, gear down or at high angle of attack. Skip with Fire or Center View.");
+        KillCamView = Config.Bind("Kill Cam", "KillCamView", Helpers.KillCamView.Auto,
+            "FromAircraft: the chase camera turns to watch the wreck from your aircraft. CutToWreck: cut to the wreck and orbit it, then return (you keep flying). Auto: cut for the big moments (close gun kills, big targets), watch otherwise.");
+        KillCamOnMissileHit = Config.Bind("Kill Cam", "KillCamOnMissileHit", true,
+            "Start the kill cam the moment your missile hits an aircraft, while it is still whole and breaking apart, instead of when the game later declares it dead (often seconds afterwards, by which time little is left). DESTROYED still waits for the actual kill. Gun kills always use the kill itself.");
+        KillCamIncludeGround = Config.Bind("Kill Cam", "KillCamIncludeGround", false,
+            "Also allow kill cams for ground vehicles and buildings.");
+        KillCamSeconds = Config.Bind("Kill Cam", "KillCamSeconds", 2.2f,
+            new ConfigDescription("How long the kill cam lasts, in real seconds.", new AcceptableValueRange<float>(0.5f, 6f)));
+        KillCamSlowMotion = Config.Bind("Kill Cam", "KillCamSlowMotion", 0.3f,
+            new ConfigDescription("Game speed during the kill cam, single player only (1 = no slow motion). Never overrides the game's own slow motion or the pause screen.", new AcceptableValueRange<float>(0.05f, 1f)));
+        KillCamSound = Config.Bind("Kill Cam", "KillCamSound", true,
+            "Play a sound when the kill cam starts: any .wav, .ogg or .mp3 placed in BepInEx/plugins/ArcadeCam/sounds/killcam (a random one each time). The folder is created on first use; no sounds are included.");
+        KillCamSoundVolume = Config.Bind("Kill Cam", "KillCamSoundVolume", 0.8f,
+            new ConfigDescription("Kill cam sound volume.", new AcceptableValueRange<float>(0f, 1f)));
+        FrameRateIndependentChase = Config.Bind("Camera Motion", "FrameRateIndependentChase", true,
+            "Smooth the chase camera's rotation the same way at any frame rate. The game's own smoothing changes with frame time, so uneven frames make the aircraft twitch a few degrees during fast rolls. Same smoothing amount (View Smoothing setting); off restores the game's original behaviour.");
+        // New section and key names on purpose: the first attempt's keys may hold tuned-off values.
+        DynamicChaseEnabled = Config.Bind("Dynamic Chase", "DynamicChaseEnabled", true,
+            "Normal chase camera that leans into manoeuvres: pulling up raises the camera so the aircraft drops in the frame, rolling slides it to the opposite side, yawing lets it trail the turn. Aim stays locked to the aircraft (no lag), so landing stays easy. Keeps working during free look; pauses only for Look at Target. Not used with the level-horizon cameras. Also works alongside WT Mouse Aim.");
+        DynamicChaseStrength = Config.Bind("Dynamic Chase", "DynamicChaseStrength", 2f,
+            new ConfigDescription("How far the camera moves. 2 is the designed amount; 3 is exaggerated. Travel is always capped so the aircraft stays in frame.", new AcceptableValueRange<float>(0f, 3f)));
+        DynamicChaseRollLag = Config.Bind("Dynamic Chase", "DynamicChaseRollLag", 0.3f,
+            new ConfigDescription("How much the camera's roll trails the aircraft's roll (up to 8 degrees at 1). 0 keeps roll locked to the aircraft.", new AcceptableValueRange<float>(0f, 1f)));
+        DynamicChaseDeadzone = Config.Bind("Dynamic Chase", "DynamicChaseDeadzone", 3f,
+            new ConfigDescription("Rotation rates below this (degrees per second) are ignored, so small corrections and landing approaches stay steady.", new AcceptableValueRange<float>(0f, 30f)));
+        DynamicChaseResponse = Config.Bind("Dynamic Chase", "DynamicChaseResponse", 0.7f,
+            new ConfigDescription("Spring smoothing time in seconds. Lower is snappier, higher is floatier.", new AcceptableValueRange<float>(0.05f, 1.5f)));
 
         WeaponCameraEnabled = Config.Bind("Weapon Camera", "WeaponCameraEnabled", true,
             "Experimental player missile/bomb camera from chase view. Bind ArcadeCam Weapon Camera. Flight controls remain active; no spectator/unit switch is used.");
@@ -171,58 +204,18 @@ public class Plugin : BaseUnityPlugin
             "Hide native flight instruments, combat HUD, helmet readouts and minimap throughout weapon tracking, impact/wreckage viewing and return. Restores each canvas's previous visibility afterward; flight controls and HUD updates remain active.");
         WeaponCameraFollowAudio = Config.Bind("Weapon Camera", "WeaponCameraFollowAudio", true,
             "Hear the world from the weapon-camera viewpoint, including native explosion delay and supersonic sound checks. Restores aircraft audio on return. No extra explosion sounds or volume boost are added.");
-        TargetingScreenEnabled = Config.Bind("Targeting Screen", "TargetingScreenEnabled", true,
-            "Show the aircraft's native cockpit targeting-camera feed on the chase HUD when a target is selected. Uses the same sensor and overlay; hides when the native camera is unavailable.");
-        TargetingScreenXPercent = Config.Bind("Targeting Screen", "TargetingScreenXPercent", 100f,
-            new ConfigDescription("Horizontal panel position: 0 is the left edge, 100 the right edge. The full panel stays inside the view.", new AcceptableValueRange<float>(0f, 100f)));
-        TargetingScreenYPercent = Config.Bind("Targeting Screen", "TargetingScreenYPercent", 25f,
-            new ConfigDescription("Vertical panel position: 0 is the top, 100 the bottom. Default places it in the upper right, below weapon selection.", new AcceptableValueRange<float>(0f, 100f)));
-        TargetingScreenWidthPercent = Config.Bind("Targeting Screen", "TargetingScreenWidthPercent", 24f,
-            new ConfigDescription("Panel width as a percentage of the view. The native feed's aspect ratio is preserved.", new AcceptableValueRange<float>(10f, 50f)));
-
         VirtualJoystick = Config.Bind(
             SectionJoystick,
             "VirtualJoystick",
             true,
             "Mouse drives the virtual joystick in chase view, as it already does in the cockpit.");
 
-        FlightHud = Config.Bind(
-            SectionChaseHud,
-            "FlightHud",
-            true,
-            "Keep the flight HUD on in chase view. Vanilla switches it off on entering chase.");
-        Map = Config.Bind(
-            SectionChaseHud,
-            "Map",
-            true,
-            "Keep the minimap alive in chase view. Needs FlightHud.");
         TurretAim = Config.Bind(
             SectionChaseHud,
             "TurretAim",
             true,
             "A manually aimed turret follows the camera in chase. Off pins it to the nose instead, "
             + "like a fixed forward gun.");
-        PitchLadder = Config.Bind(
-            SectionChaseHud,
-            "PitchLadder",
-            false,
-            "Show the pitch ladder. Its rungs and its horizon line are one scrolling texture, so "
-            + "they come and go together.");
-        Waterline = BindHudAttachment("Waterline", HudAttachment.Aircraft,
-            "Placement of the aircraft datum marker: Aircraft, Camera (screen-fixed), or Hidden. Camera placement is an arcade view marker, not the actual nose direction. Camera presets preserve this choice.");
-        LeftInstruments = BindHudAttachment("LeftInstruments", HudAttachment.Aircraft,
-            "Placement of airspeed, AoA, Mach, g and fuel: Aircraft, Camera (screen-fixed), or Hidden.");
-        RightInstruments = BindHudAttachment("RightInstruments", HudAttachment.Aircraft,
-            "Placement of throttle, RPM, altitude and climb rate: Aircraft, Camera (screen-fixed), or Hidden.");
-        Compass = BindHudAttachment("Compass", HudAttachment.Aircraft,
-            "Placement of the heading ribbon and bearing readout: Aircraft, Camera (screen-fixed), or Hidden. Readings remain aircraft heading. Camera presets preserve this choice.");
-        VirtualJoystickIndicator = Config.Bind(
-            SectionChaseHud,
-            "VirtualJoystickIndicator",
-            false,
-            "Show the virtual joystick's stretching line and the dot on its end. Drawing only — the "
-            + "stick keeps working either way.");
-
         ChaseViewByDefault = Config.Bind(
             SectionDefaults, "ChaseViewByDefault", true,
             "Use chase when the normal third-person switch would enter orbit from cockpit or a newly followed local aircraft. Explicit camera-picker choices are preserved.");
@@ -320,8 +313,8 @@ public class Plugin : BaseUnityPlugin
             harmony.PatchAll();
             WtMouseAimCompatibility.Initialize(harmony);
             WTMouseAimSupport.SettingChanged += WtMouseAimCompatibility.SettingsChanged;
-            HudElements.Initialize();
             WeaponCamera.Initialize(harmony);
+            KillCam.Initialize(harmony);
             _hudUpdater = gameObject.AddComponent<ChaseHudUpdater>();
         }
         else
@@ -331,37 +324,12 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
-    private ConfigEntry<HudAttachment> BindHudAttachment(string key, HudAttachment fallback, string description)
-    {
-        var definition = new ConfigDefinition(SectionChaseHud, key);
-        bool save = Config.SaveOnConfigSet;
-        Config.SaveOnConfigSet = false;
-        try
-        {
-            // The old keys were booleans. Consume their raw values before binding the
-            // dropdown, preserving true as Aircraft and false as Hidden without parse errors.
-            string previous = Config.Bind(definition, fallback.ToString(), new ConfigDescription(description)).Value;
-            HudAttachment mode = HudAttachmentMigration.Parse(previous, fallback);
-            Config.Remove(definition);
-            return Config.Bind(definition, mode, new ConfigDescription(description));
-        }
-        finally
-        {
-            Config.SaveOnConfigSet = save;
-            if (save) Config.Save();
-        }
-    }
-
-    private void OnGUI() => TargetingScreenOverlay.Draw();
-
     private void OnDestroy()
     {
         if (WTMouseAimSupport != null) WTMouseAimSupport.SettingChanged -= WtMouseAimCompatibility.SettingsChanged;
         WtMouseAimCompatibility.Dispose();
         if (_hudUpdater != null) Destroy(_hudUpdater);
         WeaponCamera.Dispose();
-        HudElements.Dispose();
-        TargetingScreenOverlay.Dispose();
     }
 
     private void Update()

@@ -53,6 +53,10 @@ internal static class ChaseTargetLook
         if (player != null && !player.GetButton("Cycle Look At"))
             _suppressUntilRelease = false;
 
+        // The kill cam borrows this view to watch the wreck, framing and smooth return included.
+        if (cam != null && ChaseInput.IsAllowed(cam) && KillCam.TryGetFocus(cam, out position))
+            return true;
+
         if (_suppressUntilRelease || !Plugin.LookAtTargetInChase.Value
             || !ChaseInput.IsAllowed(cam) || cam.orbitState == null)
             return false;

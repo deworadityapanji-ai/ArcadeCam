@@ -39,6 +39,12 @@ internal sealed class WeaponCameraState
         return false;
     }
 
+    /// <summary>Kill cam: go straight to the impact/wreck view, with no weapon to follow first.</summary>
+    internal void StartImpact()
+    {
+        Phase = WeaponViewPhase.Impact; PhaseTime = 0f; _lossTime = 0f; TrackedToken = null;
+    }
+
     internal void Detonated(float impactSeconds)
     {
         if (Phase != WeaponViewPhase.Following) return;

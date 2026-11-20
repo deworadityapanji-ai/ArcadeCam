@@ -34,3 +34,16 @@ YawOnMouse-main/
 *.log
 log.txt
 *.ahk
+
+# Private local development files
+.tools/
+.reference/
+ChaseCamPlus/GameDir.local.targets
+
+# Local project history and assistant handoffs
+/CONTEXT_HANDOFF.md
+/GETTING_STARTED.md
+/HUD_FLASH_INVESTIGATION.md
+/FEATURE_TESTING.md
+/AGENTS.md
+/scripts/connect-fork.ps1

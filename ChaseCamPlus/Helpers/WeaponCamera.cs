@@ -15,6 +15,8 @@ internal static class WeaponCamera
     private static readonly WeaponCameraFollow Follow = new();
     private static readonly WeaponImpactTarget ImpactTarget = new();
     private static readonly WeaponImpactMotion ImpactMotion = new();
+    private static readonly WeaponKillViewMotion KillMotion = new();
+    private static Vector3 _killForward, _killSide;
     private static readonly FieldInfo MissileTarget = AccessTools.Field(typeof(Missile), "target");
     private sealed class RenderAnchor { internal Transform Node; internal GlobalPosition Position; internal Quaternion Rotation; }
     private static readonly RenderAnchor[] SkyAnchors = { new(), new() };
@@ -38,6 +40,8 @@ internal static class WeaponCamera
     private static float _fov, _returnFov, _baseFov, _baseNearClip;
     private static float _impactDuration, _impactFollowStart;
     private static bool _impactFollowing;
+    // Kill cam variant A: the impact view started on a kill, with no missile and no input binding.
+    private static bool _killView;
 
     internal static bool IsDisplaying => State.Displaying;
 
@@ -129,6 +133,13 @@ internal static class WeaponCamera
         _held = player != null && action >= 0 && player.GetButton(action);
         bool down = player != null && action >= 0 && player.GetButtonDown(action);
         CameraStateManager cam = SceneSingleton<CameraStateManager>.i;
+        if (_killView)
+        {
+            // The kill cam owns this view; the weapon camera binding does not end it.
+            if (!Plugin.IsActive || !ValidContext(cam)) Cancel();
+            if (!State.Displaying) { _killView = false; _prepared = false; WeaponCameraAudio.Restore(); RestoreHud(); }
+            return;
+        }
         bool allowed = Plugin.IsActive && Plugin.WeaponCameraEnabled.Value && ValidContext(cam);
         int? latest = _latest != null && !_latest.disabled && _latest.gameObject.activeInHierarchy
             ? _latest.GetInstanceID() : (int?)null;
@@ -155,7 +166,7 @@ internal static class WeaponCamera
     {
         _prepared = false;
         if (!State.Displaying) { _tracked = null; ImpactTarget.Reset(); WeaponCameraAudio.Restore(); RestoreHud(); return; }
-        if (!Plugin.WeaponCameraEnabled.Value || cam != _camera || !ValidContext(cam)) { Cancel(); return; }
+        if ((!_killView && !Plugin.WeaponCameraEnabled.Value) || cam != _camera || !ValidContext(cam)) { Cancel(); return; }
         if (_startPending)
         {
             _position = cam.transform.GlobalPosition(); _rotation = cam.transform.rotation;
@@ -163,7 +174,8 @@ internal static class WeaponCamera
             _startPending = false;
         }
         float dt = Mathf.Max(0f, Time.deltaTime);
-        float impactSeconds = Plugin.WeaponCameraCinematic.Value ? Plugin.WeaponCameraImpactSeconds.Value : 0f;
+        float impactSeconds = _killView ? _impactDuration
+            : Plugin.WeaponCameraCinematic.Value ? Plugin.WeaponCameraImpactSeconds.Value : 0f;
         if (State.Phase == WeaponViewPhase.Following && !_impactPending && _tracked != null && !_tracked.disabled)
         {
             Unit target = MissileTarget?.GetValue(_tracked) as Unit;
@@ -194,8 +206,8 @@ internal static class WeaponCamera
         float hitRadius = 0f;
         if (State.Phase == WeaponViewPhase.Impact)
         {
-            bool canFollow = impactSeconds > 0f && Plugin.WeaponCameraFollowHitTarget.Value
-                && Plugin.WeaponCameraWreckageSeconds.Value > 0f;
+            bool canFollow = _killView || (impactSeconds > 0f && Plugin.WeaponCameraFollowHitTarget.Value
+                && Plugin.WeaponCameraWreckageSeconds.Value > 0f);
             if (_impactFollowing && (!canFollow || !ImpactTarget.TryPoint(out hitPoint, out hitRadius)))
                 State.Return();
             else if (!_impactFollowing && canFollow && ImpactTarget.TryPoint(out hitPoint, out hitRadius))
@@ -234,7 +246,9 @@ internal static class WeaponCamera
         else if (State.Phase == WeaponViewPhase.Impact)
         {
             Vector3 point = _impactFollowing ? hitPoint : _impact.ToLocalPosition();
-            Vector3 wanted = _impactFollowing
+            Vector3 wanted = _killView
+                ? KillMotion.Advance(point, ImpactTarget.Velocity(), hitRadius, _killForward, _killSide, dt)
+                : _impactFollowing
                 ? ImpactMotion.Advance(point, hitRadius, State.PhaseTime - _impactFollowStart, dt)
                 : point + Quaternion.AngleAxis(State.PhaseTime * 14f, Vector3.up) * _impactOffset;
             Vector3 position = ClearTerrain(point + Vector3.up, wanted);
@@ -384,6 +398,37 @@ internal static class WeaponCamera
         RestoreVisual();
     }
 
+    internal static bool KillViewActive => _killView && State.Displaying;
+
+    /// <summary>
+    /// Kill cam variant A: cut to the victim's wreck (its largest surviving part) and orbit it,
+    /// then return to the chase view. Rendering-only, like the weapon camera: you keep flying.
+    /// </summary>
+    internal static bool StartKillView(CameraStateManager cam, Unit victim, float seconds)
+    {
+        if (victim == null || State.Displaying || !ValidContext(cam)) return false;
+        Cancel();
+        _camera = cam; _tracked = null;
+        ImpactTarget.Follow(victim);
+        if (!ImpactTarget.TryPoint(out Vector3 point, out float radius)) { ImpactTarget.Reset(); return false; }
+        // Front quarter: ahead of the wreck along its path, on your side, a little above.
+        _killForward = victim.transform.forward;
+        _killSide = cam.transform.position - point;
+        KillMotion.Reset();
+        _killView = true;
+        State.StartImpact();
+        _impactFollowing = true; _impactFollowStart = 0f; _impactDuration = Mathf.Max(0.5f, seconds);
+        _startPending = true; _ended = false; _impactPending = false; _posePhase = WeaponViewPhase.Off;
+        Plugin.Logger.LogInfo("Kill cam: cutting to the wreck.");
+        return true;
+    }
+
+    /// <summary>Ends the kill cam's wreck view with the usual smooth return.</summary>
+    internal static void EndKillView()
+    {
+        if (_killView && State.Displaying) State.Return();
+    }
+
     internal static void CancelFor(CameraStateManager cam)
     {
         if (cam == _camera) Cancel();
@@ -393,7 +438,7 @@ internal static class WeaponCamera
     {
         WeaponCameraAudio.Restore();
         RestoreVisual(); RestoreHud();
-        State.Cancel(_held); _prepared = false; _tracked = null;
+        State.Cancel(_held); _prepared = false; _tracked = null; _killView = false;
         _impactPending = false; _ended = false; _startPending = false; _posePhase = WeaponViewPhase.Off;
         Follow.Reset();
         ImpactTarget.Reset(); _impactFollowing = false;

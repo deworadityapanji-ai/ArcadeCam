@@ -55,8 +55,24 @@
         <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
         <Private>false</Private>
       </Reference>
+      <Reference Include="UnityEngine.UnityWebRequestModule">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
+      <Reference Include="UnityEngine.UnityWebRequestAudioModule">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.UnityWebRequestAudioModule.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
       <Reference Include="UnityEngine.UI">
         <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.UI.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
+      <Reference Include="UnityEngine.TextRenderingModule">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+        <Private>false</Private>
+      </Reference>
+      <Reference Include="Unity.TextMeshPro">
+        <HintPath>$(GameDir)\NuclearOption_Data\Managed\Unity.TextMeshPro.dll</HintPath>
         <Private>false</Private>
       </Reference>
       <Reference Include="UnityEngine.UIModule">
